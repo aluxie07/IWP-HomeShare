@@ -64,7 +64,7 @@ Optional: `ALLOWED_ORIGINS` — comma-separated extra origins (e.g. `https://YOU
 | "Cannot reach API" | GitHub secret `REACT_APP_API_URL` = `https://your-service.onrender.com` (no trailing slash). Re-deploy Pages after changing. |
 | CORS error | On Render, set `CLIENT_URL` to your GitHub Pages URL. Check Render logs for blocked origin. |
 | Slow first request | Free tier sleeps — wait ~30s or upgrade. Test `https://your-service.onrender.com/health` |
-| Email `Connection timeout` | Gmail SMTP often blocks Render. Use [Brevo](https://www.brevo.com) SMTP instead, or read activation link in **Render logs** |
+| Email `Connection timeout` | **Render free tier blocks all SMTP** (ports 587/465). Use `BREVO_API_KEY` (HTTPS API), not SMTP — see `server/SMTP.md` |
 | reCAPTCHA `timeout-or-duplicate` | Complete the checkbox again (each token works once). Do not double-click Register. |
 
 Render env vars must include: `MONGO_URI`, `JWT_SECRET`, `RECAPTCHA_SECRET_KEY`, `CLIENT_URL`, and matching SMTP keys if using email.

@@ -11,6 +11,7 @@ const accountRoutes = require("./routes/account");
 const fileRoutes = require("./routes/files");
 const shareRoutes = require("./routes/shares");
 const { isEmailConfigured, getMissingEmailVars } = require("./utils/emailConfig");
+const { verifySmtpConnection } = require("./utils/mailer");
 
 const app = express();
 
@@ -81,15 +82,28 @@ app.get("/health", (req, res) => {
     });
 });
 
+app.get("/health/smtp", async (req, res) => {
+    const result = await verifySmtpConnection();
+    res.status(result.ok ? 200 : 503).json(result);
+});
+
 const PORT = process.env.PORT || 8080;
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     if (isEmailConfigured()) {
-        console.log("Email: SMTP configured — activation emails will be sent.");
+        console.log("Email: configured — testing connection…");
+        verifySmtpConnection().then((result) => {
+            if (result.ok) {
+                console.log(`Email: ${result.message}`);
+            } else {
+                console.error(`Email: ${result.message}`);
+                console.error("See server/SMTP.md (use BREVO_API_KEY on Render free tier).");
+            }
+        });
     } else {
         console.warn(
-            `Email: SMTP not configured (missing: ${getMissingEmailVars().join(", ")}). Activation links will only print in this terminal.`
+            `Email: SMTP not configured (missing: ${getMissingEmailVars().join(", ")}). Activation links will only print in logs.`
         );
     }
 });
