@@ -18,7 +18,7 @@ Uses HTTPS (port 443), not SMTP.
 
 ### 2. Render environment variables
 
-Remove or ignore SMTP vars on Render. Set:
+**Delete** `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` on Render (they cause `ENETUNREACH` / timeout errors). Set **only**:
 
 ```env
 BREVO_API_KEY=xkeysib-your-api-key-here
@@ -27,11 +27,17 @@ EMAIL_FROM_NAME=HomeShare
 CLIENT_URL=https://yourusername.github.io/IWP-HomeShare
 ```
 
+On startup, Render logs should show: `Email: provider = brevo-api`
+
 ### 3. Redeploy and test
 
-Open: `https://your-app.onrender.com/health/smtp`
+Open: `https://your-app.onrender.com/health` and check the `email` object (or `/health/email` after latest deploy).
 
-Expected: `{ "ok": true, "message": "Brevo API connection verified (HTTPS)" }`
+Expected: `"provider": "brevo-api"`, `"brevoApiKeySet": true`, `"cloudHost": true`
+
+Then: `https://your-app.onrender.com/health/smtp` → `{ "ok": true, "message": "Brevo API connection verified (HTTPS)" }`
+
+If logs show `Connection timeout` and `provider=smtp (...)`, SMTP is still in use — remove `SMTP_*` vars and set `BREVO_API_KEY`.
 
 ### 4. Local development
 

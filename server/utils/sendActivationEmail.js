@@ -1,4 +1,9 @@
-const { sendMail, getEmailErrorMessage, isEmailConfigured } = require("./mailer");
+const {
+    sendMail,
+    getEmailErrorMessage,
+    isEmailConfigured,
+    getEmailProvider,
+} = require("./mailer");
 
 class EmailSendError extends Error {
     constructor(message) {
@@ -34,7 +39,10 @@ async function sendActivationEmail(email, token) {
         console.log(`[HomeShare] Activation email sent to ${email}`);
         return { sent: true, link };
     } catch (err) {
-        console.error("[HomeShare] Failed to send activation email:", err.message);
+        console.error(
+            `[HomeShare] Failed to send activation email (provider=${getEmailProvider()}):`,
+            err.message
+        );
         console.log(`[HomeShare] Activation link for ${email}: ${link}`);
         throw new EmailSendError(getEmailErrorMessage(err));
     }

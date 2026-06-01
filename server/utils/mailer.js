@@ -1,8 +1,17 @@
 const nodemailer = require("nodemailer");
-const { isEmailConfigured, usesBrevoApi } = require("./emailConfig");
+const {
+    isEmailConfigured,
+    usesBrevoApi,
+    isCloudHost,
+    getEmailProvider,
+} = require("./emailConfig");
 const { sendViaBrevoApi, verifyBrevoApi } = require("./brevoApi");
 
 const SMTP_TIMEOUT_MS = Number(process.env.SMTP_TIMEOUT_MS) || 20000;
+
+const smtpSocketOptions = {
+    family: 4,
+};
 
 function smtpAuth() {
     return {
@@ -12,7 +21,8 @@ function smtpAuth() {
 }
 
 function smtpPort() {
-    return Number(process.env.SMTP_PORT) || 587;
+    const port = Number(process.env.SMTP_PORT) || 587;
+    return port === 465 ? 587 : port;
 }
 
 function createTransporter() {
@@ -20,8 +30,12 @@ function createTransporter() {
         return null;
     }
 
+    if (isCloudHost()) {
+        return null;
+    }
+
     const port = smtpPort();
-    const secure = process.env.SMTP_SECURE === "true" || port === 465;
+    const host = process.env.SMTP_HOST.trim();
 
     const timeout = {
         connectionTimeout: SMTP_TIMEOUT_MS,
@@ -30,8 +44,7 @@ function createTransporter() {
     };
 
     const isGmail =
-        process.env.SMTP_HOST === "smtp.gmail.com" ||
-        smtpAuth().user.endsWith("@gmail.com");
+        host === "smtp.gmail.com" || smtpAuth().user.endsWith("@gmail.com");
 
     if (isGmail) {
         return nodemailer.createTransport({
@@ -41,18 +54,20 @@ function createTransporter() {
             requireTLS: true,
             auth: smtpAuth(),
             pool: false,
+            ...smtpSocketOptions,
             ...timeout,
         });
     }
 
     return nodemailer.createTransport({
-        host: process.env.SMTP_HOST.trim(),
+        host,
         port,
-        secure,
-        requireTLS: !secure && port === 587,
+        secure: false,
+        requireTLS: true,
         auth: smtpAuth(),
         pool: false,
         tls: { minVersion: "TLSv1.2" },
+        ...smtpSocketOptions,
         ...timeout,
     });
 }
@@ -60,10 +75,15 @@ function createTransporter() {
 function getEmailErrorMessage(err) {
     const msg = err.message || "";
 
-    if (process.env.RENDER && !usesBrevoApi()) {
+    if (isCloudHost() && !usesBrevoApi()) {
         return (
-            "Email failed: Render free tier blocks SMTP (ports 587/465). " +
-            "Add BREVO_API_KEY on Render instead of SMTP (see server/SMTP.md)."
+            "Email not sent: this host blocks SMTP. Add BREVO_API_KEY + EMAIL_FROM (see server/SMTP.md)."
+        );
+    }
+
+    if (msg.includes("ENETUNREACH") || msg.includes("EAIFNOSUPPORT")) {
+        return (
+            "SMTP could not reach the mail server (IPv6/network). Use BREVO_API_KEY instead of Gmail SMTP, or set SMTP_PORT=587."
         );
     }
 
@@ -72,9 +92,7 @@ function getEmailErrorMessage(err) {
     }
 
     if (msg.includes("timeout") || msg.includes("ETIMEDOUT")) {
-        return usesBrevoApi()
-            ? `Brevo API error: ${msg}`
-            : "SMTP timed out. On Render use BREVO_API_KEY, not SMTP.";
+        return "SMTP timed out. On Render use BREVO_API_KEY (HTTPS), not SMTP.";
     }
 
     return `Could not send email: ${msg}`;
@@ -85,22 +103,21 @@ async function verifySmtpConnection() {
         return verifyBrevoApi();
     }
 
-    const transporter = createTransporter();
-    if (!transporter) {
-        return { ok: false, message: "Email not configured" };
-    }
-
-    if (process.env.RENDER) {
+    if (isCloudHost()) {
         return {
             ok: false,
-            message:
-                "Render free tier blocks SMTP ports. Set BREVO_API_KEY (HTTPS) in environment variables.",
+            message: "On this host set BREVO_API_KEY (SMTP ports are blocked).",
         };
+    }
+
+    const transporter = createTransporter();
+    if (!transporter) {
+        return { ok: false, message: "SMTP not configured for this host" };
     }
 
     try {
         await transporter.verify();
-        return { ok: true, message: "SMTP connection verified" };
+        return { ok: true, message: "SMTP connection verified (IPv4)" };
     } catch (err) {
         return { ok: false, message: err.message };
     }
@@ -108,12 +125,13 @@ async function verifySmtpConnection() {
 
 async function sendMail({ to, subject, text, html }) {
     if (usesBrevoApi()) {
+        console.log("[HomeShare] Sending email via Brevo API (HTTPS)");
         return sendViaBrevoApi({ to, subject, text, html });
     }
 
-    if (process.env.RENDER) {
+    if (isCloudHost()) {
         throw new Error(
-            "Render blocks SMTP on free tier. Set BREVO_API_KEY in Render environment variables."
+            "SMTP is blocked on this host. Set BREVO_API_KEY and EMAIL_FROM in environment variables."
         );
     }
 
@@ -124,6 +142,7 @@ async function sendMail({ to, subject, text, html }) {
         return { sent: false, skipped: true };
     }
 
+    console.log(`[HomeShare] Sending email via SMTP (${process.env.SMTP_HOST}:587 IPv4)`);
     await transporter.sendMail({ from, to, subject, text, html });
     return { sent: true, provider: "smtp" };
 }
@@ -134,4 +153,5 @@ module.exports = {
     verifySmtpConnection,
     sendMail,
     isEmailConfigured,
+    getEmailProvider,
 };

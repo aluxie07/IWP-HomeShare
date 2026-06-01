@@ -1,4 +1,13 @@
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
+const BREVO_FETCH_TIMEOUT_MS = Number(process.env.BREVO_FETCH_TIMEOUT_MS) || 25000;
+
+async function brevoFetch(url, options = {}) {
+    const response = await fetch(url, {
+        ...options,
+        signal: AbortSignal.timeout(BREVO_FETCH_TIMEOUT_MS),
+    });
+    return response;
+}
 
 function getBrevoApiKey() {
     return (process.env.BREVO_API_KEY || "").trim();
@@ -23,7 +32,7 @@ async function sendViaBrevoApi({ to, subject, text, html }) {
     const apiKey = getBrevoApiKey();
     const sender = getSender();
 
-    const response = await fetch(BREVO_API_URL, {
+    const response = await brevoFetch(BREVO_API_URL, {
         method: "POST",
         headers: {
             "api-key": apiKey,
@@ -59,7 +68,7 @@ async function verifyBrevoApi() {
     }
 
     try {
-        const response = await fetch("https://api.brevo.com/v3/account", {
+        const response = await brevoFetch("https://api.brevo.com/v3/account", {
             headers: {
                 "api-key": getBrevoApiKey(),
                 accept: "application/json",

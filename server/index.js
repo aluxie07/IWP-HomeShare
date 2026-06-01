@@ -10,7 +10,12 @@ const dashboardRoutes = require("./routes/dashboard");
 const accountRoutes = require("./routes/account");
 const fileRoutes = require("./routes/files");
 const shareRoutes = require("./routes/shares");
-const { isEmailConfigured, getMissingEmailVars } = require("./utils/emailConfig");
+const {
+    isEmailConfigured,
+    getMissingEmailVars,
+    getEmailProvider,
+    getEmailDiagnostics,
+} = require("./utils/emailConfig");
 const { verifySmtpConnection } = require("./utils/mailer");
 
 const app = express();
@@ -79,6 +84,7 @@ app.get("/health", (req, res) => {
     res.status(mongoConnected ? 200 : 503).json({
         ok: mongoConnected,
         mongo: mongoConnected ? "connected" : "disconnected",
+        email: getEmailDiagnostics(),
     });
 });
 
@@ -87,23 +93,34 @@ app.get("/health/smtp", async (req, res) => {
     res.status(result.ok ? 200 : 503).json(result);
 });
 
+app.get("/health/email", (req, res) => {
+    res.json(getEmailDiagnostics());
+});
+
 const PORT = process.env.PORT || 8080;
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    console.log(`Email: provider = ${getEmailProvider()}`);
+
+    const diagnostics = getEmailDiagnostics();
+    if (diagnostics.cloudHost && diagnostics.smtpConfigured && !diagnostics.brevoApiKeySet) {
+        console.error(
+            "Email: SMTP_* vars are set on a cloud host but will not work. Remove SMTP_* and set BREVO_API_KEY + EMAIL_FROM (see server/SMTP.md)."
+        );
+    }
+
     if (isEmailConfigured()) {
-        console.log("Email: configured — testing connection…");
         verifySmtpConnection().then((result) => {
             if (result.ok) {
                 console.log(`Email: ${result.message}`);
             } else {
                 console.error(`Email: ${result.message}`);
-                console.error("See server/SMTP.md (use BREVO_API_KEY on Render free tier).");
             }
         });
     } else {
         console.warn(
-            `Email: SMTP not configured (missing: ${getMissingEmailVars().join(", ")}). Activation links will only print in logs.`
+            `Email: not configured (missing: ${getMissingEmailVars().join(", ") || "see server/SMTP.md"}). Activation links print in logs only.`
         );
     }
 });
