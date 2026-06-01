@@ -1,9 +1,14 @@
 const express = require("express");
-const path = require("path");
 const fs = require("fs");
 const File = require("../models/File");
 const authMiddleware = require("../middleware/authMiddleware");
-const { upload, MAX_FILE_SIZE } = require("../middleware/upload");
+const { upload, MAX_FILE_SIZE, makeStoredFilename } = require("../middleware/upload");
+const {
+    shouldUseGridFS,
+    saveToGridFS,
+    fileExists,
+    streamFileToResponse,
+} = require("../utils/fileStorage");
 const {
     generateShareToken,
     getShareExpiry,
@@ -51,13 +56,31 @@ router.post("/files/upload", authMiddleware, (req, res, next) => {
             return res.status(400).json({ message: "No file provided" });
         }
 
+        const storedFilename = req.file.filename || makeStoredFilename(req.file.originalname);
+        let storageKind = "disk";
+        let storagePath = req.file.path;
+        let gridfsId;
+
+        if (shouldUseGridFS()) {
+            const gridMeta = await saveToGridFS(
+                storedFilename,
+                req.file.buffer,
+                req.file.mimetype
+            );
+            storageKind = gridMeta.storageKind;
+            gridfsId = gridMeta.gridfsId;
+            storagePath = undefined;
+        }
+
         const record = await File.create({
             filename: req.file.originalname,
-            storedFilename: req.file.filename,
+            storedFilename,
             owner: req.user.id,
             fileSize: req.file.size,
             fileType: req.file.mimetype,
-            storagePath: req.file.path,
+            storageKind,
+            gridfsId,
+            storagePath,
         });
 
         res.status(201).json({
@@ -163,11 +186,15 @@ router.get("/files/:id/download", authMiddleware, async (req, res) => {
             return res.status(404).json({ message: "File not found" });
         }
 
-        if (!fs.existsSync(file.storagePath)) {
-            return res.status(404).json({ message: "File no longer exists on disk" });
+        if (!(await fileExists(file))) {
+            return res.status(404).json({
+                message:
+                    "File is no longer available. It may have been lost after a server restart — upload it again.",
+                code: "FILE_UNAVAILABLE",
+            });
         }
 
-        res.download(path.resolve(file.storagePath), file.filename);
+        await streamFileToResponse(file, res, file.filename);
     } catch {
         res.status(500).json({ message: "Could not download file" });
     }

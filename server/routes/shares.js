@@ -1,7 +1,6 @@
 const express = require("express");
-const path = require("path");
-const fs = require("fs");
 const File = require("../models/File");
+const { fileExists, streamFileToResponse } = require("../utils/fileStorage");
 const User = require("../models/User");
 const authMiddleware = require("../middleware/authMiddleware");
 const { validateShareAccess } = require("../utils/shareAccess");
@@ -74,14 +73,18 @@ router.get("/shared/:token/download", authMiddleware, async (req, res) => {
             });
         }
 
-        if (!fs.existsSync(access.file.storagePath)) {
-            return res.status(404).json({ message: "File no longer exists on disk" });
+        if (!(await fileExists(access.file))) {
+            return res.status(404).json({
+                message:
+                    "File is no longer available. Ask the owner to upload and share the file again.",
+                code: "FILE_UNAVAILABLE",
+            });
         }
 
         access.file.shareDownloadCount += 1;
         await access.file.save();
 
-        res.download(path.resolve(access.file.storagePath), access.file.filename);
+        await streamFileToResponse(access.file, res, access.file.filename);
     } catch {
         res.status(500).json({ message: "Could not download shared file" });
     }

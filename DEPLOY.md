@@ -65,6 +65,7 @@ Optional: `ALLOWED_ORIGINS` — comma-separated extra origins (e.g. `https://YOU
 | CORS error | On Render, set `CLIENT_URL` to your GitHub Pages URL. Check Render logs for blocked origin. |
 | Slow first request | Free tier sleeps — wait ~30s or upgrade. Test `https://your-service.onrender.com/health` |
 | Email `Connection timeout` | **Render free tier blocks all SMTP** (ports 587/465). Use `BREVO_API_KEY` (HTTPS API), not SMTP — see `server/SMTP.md` |
+| `File no longer exists on disk` | Render wipes local `uploads/` on restart. Deploy latest server (uses **GridFS** in MongoDB on Render). **Re-upload** files uploaded before that fix. |
 | reCAPTCHA `timeout-or-duplicate` | Complete the checkbox again (each token works once). Do not double-click Register. |
 
 Render env vars must include: `MONGO_URI`, `JWT_SECRET`, `RECAPTCHA_SECRET_KEY`, `CLIENT_URL`, and matching SMTP keys if using email.
