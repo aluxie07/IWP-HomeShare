@@ -1,5 +1,627 @@
 .App {
+  min-height: 100vh;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   text-align: center;
+}
+
+.site-header,
+.site-footer {
+  flex-shrink: 0;
+}
+
+.site-header {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: center;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid #ddd;
+  background: #fff;
+  position: relative;
+  z-index: 1;
+}
+
+.header-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.header-slot--logo {
+  justify-content: flex-start;
+  align-items: center;
+  align-self: center;
+}
+
+.header-slot--home {
+  justify-content: flex-start;
+  align-items: center;
+  align-self: center;
+}
+
+.header-slot--dashboard {
+  justify-content: flex-start;
+  align-items: center;
+  align-self: center;
+}
+
+.header-slot--action {
+  justify-content: flex-end;
+  align-items: center;
+  align-self: center;
+}
+
+.header-nav-link {
+  position: relative;
+  font-family: "Jost", sans-serif;
+  font-size: 1.35rem;
+  font-weight: 500;
+  padding: 0 0 4px;
+  border: none;
+  background: none;
+  color: #333;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.3s ease;
+}
+
+.header-nav-link:hover {
+  transform: scale(1.08);
+}
+
+.header-nav-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.3s ease;
+}
+
+.header-nav-link:hover::after,
+.header-nav-link--active::after {
+  transform: scaleX(1);
+}
+
+.header-logo-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin-top: -4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.header-logo {
+  height: 30px;
+  width: auto;
+  display: block;
+}
+
+.main-content--gradient {
+  padding: 0;
+  flex: 1 1 auto;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gradient-page {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  box-sizing: border-box;
+}
+
+.gradient-page-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  max-width: 960px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 360px;
+  padding: 2rem;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.14);
+}
+
+.nav-links--on-gradient {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  padding: 0.5rem 1rem;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: auto;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.nav-links.nav-links--on-gradient button {
+  margin: 0;
+  padding: 0;
+  font-family: "Jost", sans-serif;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #06c;
+  text-shadow: none;
+  line-height: 1.4;
+}
+
+.home-hero {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+  max-width: 960px;
+  width: 100%;
+  padding: 2.5rem;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.14);
+  text-align: left;
+}
+
+.home-hero-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  flex-shrink: 0;
+}
+
+.home-hero-logo {
+  width: 240px;
+  height: auto;
+}
+
+.home-hero-right {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.home-hero-text {
+  font-family: "Jost", sans-serif;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: #333;
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .gradient-page {
+    padding: 1rem;
+  }
+
+  .home-hero {
+    flex-direction: column;
+    padding: 2rem 1.5rem;
+    gap: 1.5rem;
+  }
+
+  .home-hero-right {
+    text-align: center;
+  }
+}
+
+.get-started-btn,
+.auth-form button[type="submit"] {
+  font-family: "Jost", sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.6rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  background: #06c;
+  color: #fff;
+  cursor: pointer;
+}
+
+.get-started-btn:hover,
+.auth-form button[type="submit"]:hover {
+  background: #05a;
+}
+
+.get-started-btn--with-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.get-started-btn__icon {
+  font-size: 1.15em;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.main-content {
+  flex: 1;
+  padding: 2rem;
+}
+
+.site-footer {
+  padding: 1rem;
+  border-top: 1px solid #ddd;
+  background: #f5f5f5;
+}
+
+.footer-link,
+.back-link {
+  background: none;
+  border: none;
+  color: #06c;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 1rem;
+}
+
+.credits-card {
+  position: relative;
+  z-index: 1;
+  max-width: 480px;
+  width: 100%;
+  padding: 2.5rem;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.14);
+  text-align: center;
+}
+
+.credits-card .auth-title {
+  margin-bottom: 1.5rem;
+}
+
+.credits-logo-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.credits-label {
+  font-family: "Jost", sans-serif;
+  font-size: 1rem;
+  color: #333;
+  margin: 0;
+}
+
+.credits-logo {
+  width: 200px;
+  height: auto;
+  display: block;
+}
+
+.credits-logo-block a {
+  font-family: "Jost", sans-serif;
+  font-size: 0.95rem;
+  color: #06c;
+}
+
+.credits-card .back-link {
+  display: block;
+  margin: 1.5rem auto 0;
+  text-align: center;
+}
+
+.dashboard-page {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.dashboard-card {
+  padding: 2.5rem;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.14);
+  text-align: center;
+}
+
+.dashboard-message {
+  font-family: "Jost", sans-serif;
+  font-size: 1.1rem;
+  color: #333;
+  margin: 0 0 1.5rem;
+}
+
+.dashboard-user {
+  text-align: left;
+  font-family: "Jost", sans-serif;
+  color: #333;
+}
+
+.dashboard-user p {
+  margin: 0.5rem 0;
+}
+
+.dashboard-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.logout-btn {
+  font-family: "Jost", sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.6rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  background: #06c;
+  color: #fff;
+  cursor: pointer;
+}
+
+.logout-btn:hover {
+  background: #05a;
+}
+
+.delete-account-link-btn {
+  font-family: "Jost", sans-serif;
+  font-size: 0.95rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #c0392b;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.delete-account-link-btn:hover {
+  color: #922b21;
+}
+
+.delete-account-warning {
+  margin: 0 0 1.25rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #555;
+  text-align: left;
+}
+
+.delete-account-form {
+  text-align: left;
+}
+
+.delete-account-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-family: "Jost", sans-serif;
+  font-size: 0.95rem;
+  color: #333;
+}
+
+.delete-account-btn {
+  font-family: "Jost", sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  width: 100%;
+  padding: 0.65rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  background: #c0392b;
+  color: #fff;
+  cursor: pointer;
+}
+
+.delete-account-btn:hover:not(:disabled) {
+  background: #922b21;
+}
+
+.delete-account-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.auth-title {
+  font-family: "Jost", sans-serif;
+  font-size: 2rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+.auth-form input {
+  padding: 0.6rem 0.75rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.message-area {
+  min-height: 1.5rem;
+}
+
+.recaptcha-wrapper {
+  display: flex;
+  justify-content: center;
+  margin: 0.25rem 0;
+}
+
+.recaptcha-error {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #c00;
+  text-align: center;
+}
+
+.activate-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0.5rem 0 1rem;
+}
+
+.activate-page__icon {
+  width: 4rem;
+  height: 4rem;
+  margin-bottom: 1rem;
+  border-radius: 50%;
+  background: #06c;
+  color: #fff;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 4rem;
+}
+
+.activate-page__icon--error {
+  background: #c0392b;
+}
+
+.activate-page__title {
+  margin: 0 0 0.75rem;
+  font-family: "Jost", sans-serif;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #111;
+}
+
+.activate-page__text {
+  margin: 0 0 1.5rem;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: #444;
+  max-width: 22rem;
+}
+
+.activate-page__login-btn {
+  font-family: "Jost", sans-serif;
+  font-size: 1rem;
+  padding: 0.65rem 2rem;
+  border: none;
+  border-radius: 8px;
+  background: #06c;
+  color: #fff;
+  cursor: pointer;
+}
+
+.activate-page__login-btn:hover {
+  background: #05a;
+}
+
+.resend-verification-btn {
+  display: block;
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  font-family: "Jost", sans-serif;
+  font-size: 0.95rem;
+  border: 1px solid #06c;
+  border-radius: 8px;
+  background: transparent;
+  color: #06c;
+  cursor: pointer;
+}
+
+.resend-verification-btn:hover {
+  background: rgba(0, 102, 204, 0.08);
+}
+
+.resend-verification-msg {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.forgot-password-link {
+  align-self: flex-end;
+  margin: -0.25rem 0 0.25rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: "Jost", sans-serif;
+  font-size: 0.9rem;
+  color: #06c;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.forgot-password-link:hover {
+  color: #05a;
+}
+
+.auth-form__hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: #555;
+  text-align: center;
+}
+
+.auth-form__secondary-btn {
+  margin-top: 0.5rem;
+  font-family: "Jost", sans-serif;
+  font-size: 1rem;
+  padding: 0.6rem 1.25rem;
+  border: 1px solid #06c;
+  border-radius: 8px;
+  background: transparent;
+  color: #06c;
+  cursor: pointer;
+  width: 100%;
+}
+
+.auth-form__secondary-btn:hover {
+  background: rgba(0, 102, 204, 0.08);
+}
+
+.error {
+  color: #c00;
+  margin: 0;
+}
+
+.success {
+  color: #060;
+  margin: 0;
+}
+
+.nav-links button {
+  margin-top: 1rem;
+  background: none;
+  border: none;
+  color: #06c;
+  cursor: pointer;
+  text-decoration: underline;
 }
 
 .App-logo {
