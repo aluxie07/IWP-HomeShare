@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { API_URL } from "../utils/api";
 import { getToken, getUser } from "../utils/authStorage";
 
-function Dashboard({ onRedirectToLogin, onLogout, onDeleteAccount }) {
+function Dashboard({
+    onRedirectToLogin,
+    onLogout,
+    onDeleteAccount,
+    onGoToUpload,
+    onGoToLibrary,
+}) {
     const [message, setMessage] = useState("");
     const [user, setUser] = useState(() => getUser());
     const [error, setError] = useState("");
@@ -71,6 +77,18 @@ function Dashboard({ onRedirectToLogin, onLogout, onDeleteAccount }) {
                         )}
                     </>
                 )}
+                <div className="dashboard-file-links">
+                    <button type="button" className="logout-btn" onClick={onGoToUpload}>
+                        Upload file
+                    </button>
+                    <button
+                        type="button"
+                        className="auth-form__secondary-btn"
+                        onClick={onGoToLibrary}
+                    >
+                        File library
+                    </button>
+                </div>
                 <div className="dashboard-actions">
                     <button type="button" className="logout-btn" onClick={onLogout}>
                         Logout

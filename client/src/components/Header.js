@@ -4,6 +4,8 @@ function Header({
     onLogoClick,
     onHomeClick,
     onDashboardClick,
+    onUploadClick,
+    onLibraryClick,
     onGetStarted,
     showGetStarted,
 }) {
@@ -44,12 +46,36 @@ function Header({
                     </button>
                 )}
             </div>
-            <div className="header-slot" aria-hidden="true" />
-            <div className="header-slot header-slot--action">
-                {showGetStarted && (
-                    <button type="button" className="get-started-btn" onClick={onGetStarted}>
-                        Get Started
+            <div className="header-slot header-slot--upload">
+                {isLoggedIn && (
+                    <button
+                        type="button"
+                        className={`header-nav-link ${
+                            currentPage === "upload" ? "header-nav-link--active" : ""
+                        }`}
+                        onClick={onUploadClick}
+                    >
+                        Upload
                     </button>
+                )}
+            </div>
+            <div className="header-slot header-slot--action">
+                {isLoggedIn ? (
+                    <button
+                        type="button"
+                        className={`header-nav-link ${
+                            currentPage === "library" ? "header-nav-link--active" : ""
+                        }`}
+                        onClick={onLibraryClick}
+                    >
+                        Library
+                    </button>
+                ) : (
+                    showGetStarted && (
+                        <button type="button" className="get-started-btn" onClick={onGetStarted}>
+                            Get Started
+                        </button>
+                    )
                 )}
             </div>
         </header>

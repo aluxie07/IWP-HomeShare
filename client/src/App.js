@@ -11,6 +11,8 @@ import ActivateAccount from "./pages/ActivateAccount";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import DeleteAccount from "./pages/DeleteAccount";
+import FileUpload from "./pages/FileUpload";
+import FileLibrary from "./pages/FileLibrary";
 import {
     isLoggedIn as hasStoredAuth,
     clearAuth,
@@ -78,10 +80,13 @@ function App() {
     };
 
     useEffect(() => {
-        if (
-            (page === "dashboard" || page === "delete-account") &&
-            !hasStoredAuth()
-        ) {
+        const protectedPages = [
+            "dashboard",
+            "delete-account",
+            "upload",
+            "library",
+        ];
+        if (protectedPages.includes(page) && !hasStoredAuth()) {
             setPage("login");
         }
     }, [page]);
@@ -99,6 +104,20 @@ function App() {
                         return;
                     }
                     setPage("dashboard");
+                }}
+                onUploadClick={() => {
+                    if (!hasStoredAuth()) {
+                        setPage("login");
+                        return;
+                    }
+                    setPage("upload");
+                }}
+                onLibraryClick={() => {
+                    if (!hasStoredAuth()) {
+                        setPage("login");
+                        return;
+                    }
+                    setPage("library");
                 }}
                 onGetStarted={() => setPage("register")}
                 showGetStarted={!isLoggedIn}
@@ -154,6 +173,8 @@ function App() {
                         onRedirectToLogin={redirectToLogin}
                         onLogout={redirectToLogin}
                         onDeleteAccount={() => setPage("delete-account")}
+                        onGoToUpload={() => setPage("upload")}
+                        onGoToLibrary={() => setPage("library")}
                     />
                 )}
                 {page === "delete-account" && (
@@ -163,6 +184,18 @@ function App() {
                             setIsLoggedIn(false);
                             setPage("home");
                         }}
+                    />
+                )}
+                {page === "upload" && (
+                    <FileUpload
+                        onRedirectToLogin={redirectToLogin}
+                        onGoToLibrary={() => setPage("library")}
+                    />
+                )}
+                {page === "library" && (
+                    <FileLibrary
+                        onRedirectToLogin={redirectToLogin}
+                        onGoToUpload={() => setPage("upload")}
                     />
                 )}
             </main>

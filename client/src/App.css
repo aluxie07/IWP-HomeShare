@@ -41,7 +41,8 @@
   align-self: center;
 }
 
-.header-slot--dashboard {
+.header-slot--dashboard,
+.header-slot--upload {
   justify-content: flex-start;
   align-items: center;
   align-self: center;
@@ -657,4 +658,158 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+.dashboard-file-links {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.files-page-card {
+  max-width: 640px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.files-page-intro {
+  margin: 0 0 1.25rem;
+  font-family: "Jost", sans-serif;
+  color: #555;
+  line-height: 1.5;
+}
+
+.file-upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.file-upload-label {
+  font-family: "Jost", sans-serif;
+  font-weight: 600;
+  color: #333;
+}
+
+.file-upload-input {
+  font-family: "Jost", sans-serif;
+}
+
+.file-upload-selected {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #444;
+}
+
+.file-upload-submit {
+  align-self: flex-start;
+}
+
+.files-section {
+  border-top: 1px solid #e8e8e8;
+  padding-top: 1.5rem;
+}
+
+.files-section-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.files-section-title {
+  margin: 0;
+  font-family: "Jost", sans-serif;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.files-upload-nav-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+}
+
+.files-muted {
+  margin: 0;
+  color: #666;
+  font-family: "Jost", sans-serif;
+}
+
+.files-link-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: "Jost", sans-serif;
+  font-size: inherit;
+  color: #06c;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.files-link-btn:hover {
+  color: #05a;
+}
+
+.file-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.file-list-item {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.file-list-item:last-child {
+  border-bottom: none;
+}
+
+.file-list-item--library {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.file-list-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.file-list-name {
+  font-family: "Jost", sans-serif;
+  font-weight: 600;
+  color: #222;
+  word-break: break-word;
+}
+
+.file-list-meta {
+  font-family: "Jost", sans-serif;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.file-download-btn {
+  font-family: "Jost", sans-serif;
+  font-size: 0.95rem;
+  padding: 0.45rem 1rem;
+  border: 1px solid #06c;
+  border-radius: 6px;
+  background: #fff;
+  color: #06c;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.file-download-btn:hover {
+  background: rgba(0, 102, 204, 0.08);
 }

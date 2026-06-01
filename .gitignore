@@ -6,3 +6,5 @@ server/node_modules/
 client/node_modules/
 client/build/
 .DS_Store
+server/uploads/*
+!server/uploads/.gitkeep
