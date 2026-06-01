@@ -4,7 +4,7 @@ import GradientPageLayout from "../components/GradientPageLayout";
 import RecaptchaField from "../components/RecaptchaField";
 import { saveAuth } from "../utils/authStorage";
 
-import { API_URL } from "../utils/api";
+import { apiFetch, getNetworkErrorMessage } from "../utils/api";
 
 function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
     const [email, setEmail] = useState("");
@@ -34,7 +34,7 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
         }
 
         try {
-            const res = await fetch(`${API_URL}/login`, {
+            const res = await apiFetch("/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password, recaptchaToken }),
@@ -60,8 +60,8 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
 
             setSuccess(data.message || "Login successful");
             onLoginSuccess?.();
-        } catch {
-            setError("Could not reach server. Is the backend running?");
+        } catch (err) {
+            setError(getNetworkErrorMessage(err));
             resetRecaptcha();
         }
     };
@@ -74,15 +74,15 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
         }
 
         try {
-            const res = await fetch(`${API_URL}/resend-verification`, {
+            const res = await apiFetch("/resend-verification", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email }),
             });
             const data = await res.json();
             setResendMessage(data.message || "Request sent.");
-        } catch {
-            setResendMessage("Could not reach server. Is the backend running?");
+        } catch (err) {
+            setResendMessage(getNetworkErrorMessage(err));
         }
     };
 

@@ -3,7 +3,7 @@ import AuthHeader from "../components/AuthHeader";
 import GradientPageLayout from "../components/GradientPageLayout";
 import RecaptchaField from "../components/RecaptchaField";
 
-import { API_URL } from "../utils/api";
+import { apiFetch, getNetworkErrorMessage } from "../utils/api";
 import { PASSWORD_PATTERN, PASSWORD_RULE } from "../constants/password";
 
 function Register({ onSwitchToLogin }) {
@@ -15,6 +15,7 @@ function Register({ onSwitchToLogin }) {
     const [success, setSuccess] = useState("");
     const [recaptchaToken, setRecaptchaToken] = useState(null);
     const [recaptchaKey, setRecaptchaKey] = useState(0);
+    const [submitting, setSubmitting] = useState(false);
 
     const resetRecaptcha = () => {
         setRecaptchaToken(null);
@@ -36,15 +37,22 @@ function Register({ onSwitchToLogin }) {
             return;
         }
 
+        if (submitting) {
+            return;
+        }
+
+        setSubmitting(true);
+        const tokenUsed = recaptchaToken;
+
         try {
-            const res = await fetch(`${API_URL}/register`, {
+            const res = await apiFetch("/register", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     username,
                     email,
                     password,
-                    recaptchaToken,
+                    recaptchaToken: tokenUsed,
                 }),
             });
 
@@ -58,9 +66,11 @@ function Register({ onSwitchToLogin }) {
 
             setSuccess(data.message || "User registered successfully");
             resetRecaptcha();
-        } catch {
-            setError("Could not reach server. Is the backend running?");
+        } catch (err) {
+            setError(getNetworkErrorMessage(err));
             resetRecaptcha();
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -104,7 +114,9 @@ function Register({ onSwitchToLogin }) {
                         key={recaptchaKey}
                         onTokenChange={setRecaptchaToken}
                     />
-                    <button type="submit">Register</button>
+                    <button type="submit" disabled={submitting}>
+                        {submitting ? "Registering…" : "Register"}
+                    </button>
                     <div className="message-area">
                         {success && <p className="success">{success}</p>}
                         {error && <p className="error">{error}</p>}

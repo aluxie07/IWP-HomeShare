@@ -28,7 +28,10 @@ async function verifyRecaptchaMiddleware(req, res, next) {
             } else if (codes.includes("invalid-input-response")) {
                 message = "reCAPTCHA expired or was already used. Complete the checkbox again.";
             } else if (codes.includes("timeout-or-duplicate")) {
-                message = "reCAPTCHA expired. Complete the checkbox again.";
+                message =
+                    "reCAPTCHA was already used or timed out. Check the box again, then submit once.";
+            } else if (codes.includes("recaptcha-verify-timeout")) {
+                message = "Could not reach Google reCAPTCHA. Try again in a moment.";
             }
 
             console.error("[reCAPTCHA] verify failed:", codes.join(", ") || result);

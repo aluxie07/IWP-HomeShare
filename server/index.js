@@ -28,6 +28,15 @@ function getAllowedOrigins() {
         }
     }
 
+    if (process.env.ALLOWED_ORIGINS) {
+        process.env.ALLOWED_ORIGINS.split(",").forEach((origin) => {
+            const trimmed = origin.trim();
+            if (trimmed) {
+                origins.add(trimmed);
+            }
+        });
+    }
+
     return [...origins];
 }
 
@@ -62,6 +71,14 @@ mongoose
 
 app.get("/", (req, res) => {
     res.send("Backend running");
+});
+
+app.get("/health", (req, res) => {
+    const mongoConnected = mongoose.connection.readyState === 1;
+    res.status(mongoConnected ? 200 : 503).json({
+        ok: mongoConnected,
+        mongo: mongoConnected ? "connected" : "disconnected",
+    });
 });
 
 const PORT = process.env.PORT || 8080;

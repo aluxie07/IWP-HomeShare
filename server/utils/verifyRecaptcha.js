@@ -9,16 +9,29 @@ async function verifyRecaptcha(token) {
         response: token,
     });
 
-    const response = await fetch(
-        "https://www.google.com/recaptcha/api/siteverify",
-        {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: params.toString(),
-        }
-    );
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
 
-    return response.json();
+    try {
+        const response = await fetch(
+            "https://www.google.com/recaptcha/api/siteverify",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: params.toString(),
+                signal: controller.signal,
+            }
+        );
+
+        return response.json();
+    } catch (err) {
+        if (err.name === "AbortError") {
+            return { success: false, "error-codes": ["recaptcha-verify-timeout"] };
+        }
+        throw err;
+    } finally {
+        clearTimeout(timeout);
+    }
 }
 
 module.exports = verifyRecaptcha;

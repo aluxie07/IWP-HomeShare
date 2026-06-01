@@ -22,8 +22,16 @@ async function setVerificationToken(user) {
     user.verificationTokenExpires = verificationExpiry();
     user.isVerified = false;
     await user.save();
-    await sendActivationEmail(user.email, token);
-    return token;
+
+    try {
+        const result = await sendActivationEmail(user.email, token);
+        return { token, emailSent: result.sent !== false };
+    } catch (err) {
+        if (err instanceof ActivationEmailSendError) {
+            return { token, emailSent: false, emailError: err.message };
+        }
+        throw err;
+    }
 }
 
 router.post("/register", verifyRecaptchaMiddleware, async (req, res) => {
@@ -54,11 +62,13 @@ router.post("/register", verifyRecaptchaMiddleware, async (req, res) => {
             const hashedPassword = await bcrypt.hash(password, 10);
             existing.username = username;
             existing.password = hashedPassword;
-            await setVerificationToken(existing);
+            const verification = await setVerificationToken(existing);
 
             return res.status(201).json({
-                message:
-                    "Account pending activation. Check your email for the activation link.",
+                message: verification.emailSent
+                    ? "Account pending activation. Check your email for the activation link."
+                    : `Account saved. Email could not be sent (${verification.emailError}). Use Resend activation on the login page.`,
+                emailSent: verification.emailSent,
             });
         }
 
@@ -72,18 +82,17 @@ router.post("/register", verifyRecaptchaMiddleware, async (req, res) => {
         });
 
         await user.save();
-        await setVerificationToken(user);
+        const verification = await setVerificationToken(user);
 
         res.status(201).json({
-            message:
-                "Account created. Check your email for the activation link before logging in.",
+            message: verification.emailSent
+                ? "Account created. Check your email for the activation link before logging in."
+                : `Account created. Email could not be sent (${verification.emailError}). Use Resend activation on the login page.`,
+            emailSent: verification.emailSent,
         });
     } catch (err) {
         if (err.code === 11000) {
             return res.status(409).json({ message: "Username or email already exists" });
-        }
-        if (err instanceof ActivationEmailSendError) {
-            return res.status(503).json({ message: err.message });
         }
         res.status(500).json({ message: "Registration failed", error: err.message });
     }

@@ -55,6 +55,20 @@ GitHub Pages cannot run Node.js or MongoDB. Use a free host such as [Render](htt
 
 The server allows the origin from `CLIENT_URL` (e.g. `https://YOUR_USERNAME.github.io`). Set `CLIENT_URL` on the backend to your full Pages URL.
 
+Optional: `ALLOWED_ORIGINS` — comma-separated extra origins (e.g. `https://YOUR_USERNAME.github.io,http://localhost:3000`).
+
+### Render troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| "Cannot reach API" | GitHub secret `REACT_APP_API_URL` = `https://your-service.onrender.com` (no trailing slash). Re-deploy Pages after changing. |
+| CORS error | On Render, set `CLIENT_URL` to your GitHub Pages URL. Check Render logs for blocked origin. |
+| Slow first request | Free tier sleeps — wait ~30s or upgrade. Test `https://your-service.onrender.com/health` |
+| Email `Connection timeout` | Gmail SMTP often blocks Render. Use [Brevo](https://www.brevo.com) SMTP instead, or read activation link in **Render logs** |
+| reCAPTCHA `timeout-or-duplicate` | Complete the checkbox again (each token works once). Do not double-click Register. |
+
+Render env vars must include: `MONGO_URI`, `JWT_SECRET`, `RECAPTCHA_SECRET_KEY`, `CLIENT_URL`, and matching SMTP keys if using email.
+
 ## 5. Activation emails in production
 
 Set `CLIENT_URL` on the backend to your GitHub Pages URL so activation links open the live site, not `localhost`.
