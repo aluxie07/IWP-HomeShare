@@ -3,16 +3,14 @@ const path = require("path");
 const crypto = require("crypto");
 const mongoose = require("mongoose");
 const { GridFSBucket, ObjectId } = require("mongodb");
-const { isCloudHost } = require("./emailConfig");
 const { uploadsDir } = require("./storagePaths");
 
 const GRIDFS_BUCKET = "homeshare_files";
 
+/** GridFS in MongoDB by default so files work on Render and match Atlas. Set FILE_STORAGE=disk for local-only disk. */
 function shouldUseGridFS() {
-    const mode = (process.env.FILE_STORAGE || "").trim().toLowerCase();
-    if (mode === "gridfs") return true;
-    if (mode === "disk") return false;
-    return isCloudHost();
+    const mode = (process.env.FILE_STORAGE || "gridfs").trim().toLowerCase();
+    return mode !== "disk";
 }
 
 function makeStoredFilename(originalname) {
@@ -20,12 +18,31 @@ function makeStoredFilename(originalname) {
     return `${Date.now()}-${crypto.randomBytes(8).toString("hex")}${ext}`;
 }
 
-function getBucket() {
-    const db = mongoose.connection.db;
-    if (!db) {
-        throw new Error("MongoDB is not connected");
+function getDb() {
+    if (mongoose.connection.readyState !== 1) {
+        throw new Error("MongoDB is not connected yet");
     }
-    return new GridFSBucket(db, { bucketName: GRIDFS_BUCKET });
+
+    if (mongoose.connection.db) {
+        return mongoose.connection.db;
+    }
+
+    const client = mongoose.connection.getClient();
+    return client.db(mongoose.connection.name);
+}
+
+function getBucket() {
+    return new GridFSBucket(getDb(), { bucketName: GRIDFS_BUCKET });
+}
+
+function toObjectId(value) {
+    if (!value) {
+        return null;
+    }
+    if (value instanceof ObjectId) {
+        return value;
+    }
+    return new ObjectId(String(value));
 }
 
 function isGridfsRecord(file) {
@@ -33,13 +50,32 @@ function isGridfsRecord(file) {
 }
 
 function resolveDiskPath(file) {
-    if (file.storagePath && fs.existsSync(file.storagePath)) {
-        return file.storagePath;
+    if (file.storagePath) {
+        const absolute = path.isAbsolute(file.storagePath)
+            ? file.storagePath
+            : path.join(uploadsDir, file.storagePath);
+
+        if (fs.existsSync(absolute)) {
+            return absolute;
+        }
     }
+
     return path.join(uploadsDir, file.storedFilename);
 }
 
+function isForeignDiskPath(storagePath) {
+    if (!storagePath) {
+        return false;
+    }
+
+    return /^[A-Za-z]:\\/.test(storagePath) || storagePath.includes("\\");
+}
+
 async function saveToGridFS(storedFilename, buffer, contentType) {
+    if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
+        throw new Error("Upload buffer is empty — file was not received correctly");
+    }
+
     const bucket = getBucket();
 
     return new Promise((resolve, reject) => {
@@ -61,24 +97,23 @@ async function saveToGridFS(storedFilename, buffer, contentType) {
 
 async function fileExists(file) {
     if (isGridfsRecord(file)) {
-        try {
-            const bucket = getBucket();
-            if (file.gridfsId) {
-                const matches = await bucket
-                    .find({ _id: new ObjectId(file.gridfsId) })
-                    .limit(1)
-                    .toArray();
-                return matches.length > 0;
-            }
+        const bucket = getBucket();
+        const id = toObjectId(file.gridfsId);
 
-            const matches = await bucket
-                .find({ filename: file.storedFilename })
-                .limit(1)
-                .toArray();
+        if (id) {
+            const matches = await bucket.find({ _id: id }).limit(1).toArray();
             return matches.length > 0;
-        } catch {
-            return false;
         }
+
+        const matches = await bucket
+            .find({ filename: file.storedFilename })
+            .limit(1)
+            .toArray();
+        return matches.length > 0;
+    }
+
+    if (isForeignDiskPath(file.storagePath)) {
+        return false;
     }
 
     return fs.existsSync(resolveDiskPath(file));
@@ -88,13 +123,12 @@ function streamFileToResponse(file, res, downloadName) {
     return new Promise((resolve, reject) => {
         if (isGridfsRecord(file)) {
             const bucket = getBucket();
-            const downloadStream = file.gridfsId
-                ? bucket.openDownloadStream(new ObjectId(file.gridfsId))
+            const id = toObjectId(file.gridfsId);
+            const downloadStream = id
+                ? bucket.openDownloadStream(id)
                 : bucket.openDownloadStreamByName(file.storedFilename);
 
-            downloadStream.on("error", (err) => {
-                reject(err);
-            });
+            downloadStream.on("error", reject);
 
             res.setHeader(
                 "Content-Disposition",
@@ -107,6 +141,11 @@ function streamFileToResponse(file, res, downloadName) {
             downloadStream.pipe(res);
             res.on("finish", resolve);
             res.on("close", resolve);
+            return;
+        }
+
+        if (isForeignDiskPath(file.storagePath)) {
+            reject(new Error("FILE_FOREIGN_PATH"));
             return;
         }
 
@@ -133,4 +172,5 @@ module.exports = {
     fileExists,
     streamFileToResponse,
     uploadsDir,
+    isForeignDiskPath,
 };

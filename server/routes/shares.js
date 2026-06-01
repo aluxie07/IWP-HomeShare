@@ -1,6 +1,11 @@
 const express = require("express");
 const File = require("../models/File");
-const { fileExists, streamFileToResponse } = require("../utils/fileStorage");
+const {
+    fileExists,
+    streamFileToResponse,
+    isForeignDiskPath,
+} = require("../utils/fileStorage");
+const requireMongo = require("../middleware/requireMongo");
 const User = require("../models/User");
 const authMiddleware = require("../middleware/authMiddleware");
 const { validateShareAccess } = require("../utils/shareAccess");
@@ -53,7 +58,7 @@ router.get("/shared/:token", authMiddleware, async (req, res) => {
     }
 });
 
-router.get("/shared/:token/download", authMiddleware, async (req, res) => {
+router.get("/shared/:token/download", authMiddleware, requireMongo, async (req, res) => {
     try {
         const token = String(req.params.token || "").trim();
         const file = await File.findOne({ shareToken: token });
@@ -74,9 +79,11 @@ router.get("/shared/:token/download", authMiddleware, async (req, res) => {
         }
 
         if (!(await fileExists(access.file))) {
+            const hint = isForeignDiskPath(access.file.storagePath)
+                ? "The owner uploaded this file from local dev — they must upload again on the live site."
+                : "Ask the owner to upload the file again and create a new share link.";
             return res.status(404).json({
-                message:
-                    "File is no longer available. Ask the owner to upload and share the file again.",
+                message: hint,
                 code: "FILE_UNAVAILABLE",
             });
         }

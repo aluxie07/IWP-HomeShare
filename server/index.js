@@ -103,7 +103,9 @@ const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Email: provider = ${getEmailProvider()}`);
-    console.log(`Files: storage = ${shouldUseGridFS() ? "gridfs (MongoDB)" : "local disk"}`);
+    console.log(
+        `Files: storage = ${shouldUseGridFS() ? "gridfs (MongoDB)" : "local disk"} (FILE_STORAGE=${process.env.FILE_STORAGE || "gridfs"})`
+    );
 
     const diagnostics = getEmailDiagnostics();
     if (diagnostics.cloudHost && diagnostics.smtpConfigured && !diagnostics.brevoApiKeySet) {

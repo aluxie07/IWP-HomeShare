@@ -16,9 +16,19 @@ const diskStorage = multer.diskStorage({
 
 const MAX_FILE_SIZE = Number(process.env.MAX_UPLOAD_BYTES) || 10 * 1024 * 1024;
 
-const upload = multer({
-    storage: shouldUseGridFS() ? multer.memoryStorage() : diskStorage,
-    limits: { fileSize: MAX_FILE_SIZE },
-});
+function runUpload(req, res, next) {
+    const useGridFS = shouldUseGridFS();
+    const storage = useGridFS ? multer.memoryStorage() : diskStorage;
 
-module.exports = { upload, uploadsDir, MAX_FILE_SIZE, makeStoredFilename };
+    multer({ storage, limits: { fileSize: MAX_FILE_SIZE } }).single("file")(req, res, (err) => {
+        if (err) {
+            next(err);
+            return;
+        }
+
+        req.fileStorageMode = useGridFS ? "gridfs" : "disk";
+        next();
+    });
+}
+
+module.exports = { runUpload, uploadsDir, MAX_FILE_SIZE, makeStoredFilename };
