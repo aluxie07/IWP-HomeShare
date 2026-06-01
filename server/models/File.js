@@ -8,6 +8,15 @@ const fileSchema = new mongoose.Schema({
     fileSize: { type: Number, required: true },
     fileType: { type: String, required: true },
     storagePath: { type: String, required: true },
+    shareToken: { type: String, unique: true, sparse: true },
+    shareExpiresAt: { type: Date },
+    shareMaxDownloads: { type: Number },
+    shareDownloadCount: { type: Number, default: 0 },
+    sharePermission: {
+        type: String,
+        enum: ["download", "view"],
+        default: "download",
+    },
 });
 
 module.exports = mongoose.model("File", fileSchema);

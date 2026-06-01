@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import ShareFileModal from "../components/ShareFileModal";
 import {
     API_URL,
     authHeaders,
@@ -10,6 +11,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
     const [files, setFiles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [shareFile, setShareFile] = useState(null);
 
     const loadFiles = useCallback(async () => {
         setLoading(true);
@@ -85,7 +87,9 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                     </button>
                 </div>
                 <p className="files-page-intro">
-                    Files you have uploaded. Only you can see and download your files.
+                    Your files are stored securely on the server. Share links let other
+                    logged-in users download through controlled routes—not direct folder
+                    access.
                 </p>
 
                 {loading && <p className="files-muted">Loading your files…</p>}
@@ -110,19 +114,42 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                         {file.fileType} · {formatFileSize(file.fileSize)} ·{" "}
                                         {formatUploadDate(file.uploadDate)}
                                     </span>
+                                    {file.share && (
+                                        <span className="file-list-share-badge">
+                                            Shared
+                                            {file.share.permission === "view" ? " (view only)" : ""}
+                                        </span>
+                                    )}
                                 </div>
-                                <button
-                                    type="button"
-                                    className="file-download-btn"
-                                    onClick={() => handleDownload(file.id, file.filename)}
-                                >
-                                    Download
-                                </button>
+                                <div className="file-list-actions">
+                                    <button
+                                        type="button"
+                                        className="file-share-btn"
+                                        onClick={() => setShareFile(file)}
+                                    >
+                                        Share
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="file-download-btn"
+                                        onClick={() => handleDownload(file.id, file.filename)}
+                                    >
+                                        Download
+                                    </button>
+                                </div>
                             </li>
                         ))}
                     </ul>
                 )}
             </div>
+
+            {shareFile && (
+                <ShareFileModal
+                    file={shareFile}
+                    onClose={() => setShareFile(null)}
+                    onShareUpdated={loadFiles}
+                />
+            )}
         </section>
     );
 }

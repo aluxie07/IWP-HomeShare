@@ -813,3 +813,153 @@
 .file-download-btn:hover {
   background: rgba(0, 102, 204, 0.08);
 }
+
+.file-list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.file-share-btn {
+  font-family: "Jost", sans-serif;
+  font-size: 0.95rem;
+  padding: 0.45rem 1rem;
+  border: 1px solid #555;
+  border-radius: 6px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+}
+
+.file-share-btn:hover {
+  background: #f5f5f5;
+}
+
+.file-list-share-badge {
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: #06c;
+  font-weight: 600;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1.5rem;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.modal-title {
+  margin: 0 0 0.5rem;
+  font-family: "Jost", sans-serif;
+  font-size: 1.35rem;
+}
+
+.modal-file-name {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  color: #555;
+  word-break: break-word;
+}
+
+.share-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.share-modal-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-family: "Jost", sans-serif;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.share-modal-label input {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.share-modal-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: "Jost", sans-serif;
+  font-size: 0.95rem;
+}
+
+.share-link-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.share-link-input {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 0.85rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.share-revoke-btn {
+  margin-bottom: 0.75rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: "Jost", sans-serif;
+  color: #c0392b;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.modal-close-btn {
+  width: 100%;
+  margin-top: 0.5rem;
+  font-family: "Jost", sans-serif;
+  padding: 0.55rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #f8f8f8;
+  cursor: pointer;
+}
+
+.shared-file-details {
+  text-align: left;
+  font-family: "Jost", sans-serif;
+  color: #333;
+  margin-bottom: 1.25rem;
+}
+
+.shared-file-details p {
+  margin: 0.5rem 0;
+}
+
+.shared-file-view-only {
+  color: #c0392b;
+  font-weight: 600;
+}

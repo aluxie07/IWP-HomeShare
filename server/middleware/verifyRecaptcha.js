@@ -19,9 +19,20 @@ async function verifyRecaptchaMiddleware(req, res, next) {
         const result = await verifyRecaptcha(token);
 
         if (!result.success) {
-            return res.status(400).json({
-                message: "reCAPTCHA verification failed. Please try again.",
-            });
+            const codes = result["error-codes"] || [];
+            let message = "reCAPTCHA verification failed. Please try again.";
+
+            if (codes.includes("invalid-input-secret")) {
+                message =
+                    "reCAPTCHA secret key is invalid or does not match the site key. Use the secret from the same key pair in Google reCAPTCHA admin.";
+            } else if (codes.includes("invalid-input-response")) {
+                message = "reCAPTCHA expired or was already used. Complete the checkbox again.";
+            } else if (codes.includes("timeout-or-duplicate")) {
+                message = "reCAPTCHA expired. Complete the checkbox again.";
+            }
+
+            console.error("[reCAPTCHA] verify failed:", codes.join(", ") || result);
+            return res.status(400).json({ message });
         }
 
         next();

@@ -13,6 +13,7 @@ import ResetPassword from "./pages/ResetPassword";
 import DeleteAccount from "./pages/DeleteAccount";
 import FileUpload from "./pages/FileUpload";
 import FileLibrary from "./pages/FileLibrary";
+import SharedFile from "./pages/SharedFile";
 import {
     isLoggedIn as hasStoredAuth,
     clearAuth,
@@ -20,21 +21,42 @@ import {
 import {
     getVerifyTokenFromUrl,
     getResetTokenFromUrl,
+    getShareTokenFromUrl,
     clearUrlSearchParams,
+    consumePendingShare,
 } from "./utils/urlTokens";
 
 function getInitialRoute() {
     const verifyToken = getVerifyTokenFromUrl();
     if (verifyToken) {
-        return { page: "activate", verifyToken, resetToken: null };
+        return { page: "activate", verifyToken, resetToken: null, shareToken: null };
     }
 
     const resetToken = getResetTokenFromUrl();
     if (resetToken) {
-        return { page: "reset-password", verifyToken: null, resetToken };
+        return { page: "reset-password", verifyToken: null, resetToken, shareToken: null };
     }
 
-    return { page: "home", verifyToken: null, resetToken: null };
+    const shareToken = getShareTokenFromUrl();
+    if (shareToken) {
+        if (!hasStoredAuth()) {
+            sessionStorage.setItem("pendingShare", shareToken);
+            return { page: "login", verifyToken: null, resetToken: null, shareToken };
+        }
+        return { page: "shared-file", verifyToken: null, resetToken: null, shareToken };
+    }
+
+    const pendingShare = consumePendingShare();
+    if (pendingShare && hasStoredAuth()) {
+        return {
+            page: "shared-file",
+            verifyToken: null,
+            resetToken: null,
+            shareToken: pendingShare,
+        };
+    }
+
+    return { page: "home", verifyToken: null, resetToken: null, shareToken: null };
 }
 
 function App() {
@@ -42,15 +64,18 @@ function App() {
     const [page, setPage] = useState(initial.page);
     const [verifyToken, setVerifyToken] = useState(initial.verifyToken);
     const [resetToken, setResetToken] = useState(initial.resetToken);
+    const [shareToken, setShareToken] = useState(initial.shareToken);
     const [isLoggedIn, setIsLoggedIn] = useState(hasStoredAuth);
 
     useEffect(() => {
         const verify = getVerifyTokenFromUrl();
         const reset = getResetTokenFromUrl();
+        const share = getShareTokenFromUrl();
 
         if (verify) {
             setVerifyToken(verify);
             setResetToken(null);
+            setShareToken(null);
             setPage("activate");
             clearUrlSearchParams();
             return;
@@ -59,7 +84,17 @@ function App() {
         if (reset) {
             setResetToken(reset);
             setVerifyToken(null);
+            setShareToken(null);
             setPage("reset-password");
+            clearUrlSearchParams();
+            return;
+        }
+
+        if (share) {
+            setShareToken(share);
+            setVerifyToken(null);
+            setResetToken(null);
+            setPage("shared-file");
             clearUrlSearchParams();
         }
     }, []);
@@ -79,12 +114,24 @@ function App() {
         setPage("login");
     };
 
+    const handleLoginSuccess = () => {
+        setIsLoggedIn(true);
+        const pendingShare = consumePendingShare();
+        if (pendingShare) {
+            setShareToken(pendingShare);
+            setPage("shared-file");
+            return;
+        }
+        setPage("dashboard");
+    };
+
     useEffect(() => {
         const protectedPages = [
             "dashboard",
             "delete-account",
             "upload",
             "library",
+            "shared-file",
         ];
         if (protectedPages.includes(page) && !hasStoredAuth()) {
             setPage("login");
@@ -136,10 +183,7 @@ function App() {
                 {page === "credits" && <Credits onBack={() => setPage("home")} />}
                 {page === "login" && (
                     <Login
-                        onLoginSuccess={() => {
-                            setIsLoggedIn(true);
-                            setPage("dashboard");
-                        }}
+                        onLoginSuccess={handleLoginSuccess}
                         onSwitchToRegister={() => setPage("register")}
                         onForgotPassword={() => setPage("forgot-password")}
                     />
@@ -196,6 +240,12 @@ function App() {
                     <FileLibrary
                         onRedirectToLogin={redirectToLogin}
                         onGoToUpload={() => setPage("upload")}
+                    />
+                )}
+                {page === "shared-file" && (
+                    <SharedFile
+                        shareToken={shareToken}
+                        onRedirectToLogin={redirectToLogin}
                     />
                 )}
             </main>

@@ -1,0 +1,90 @@
+const express = require("express");
+const path = require("path");
+const fs = require("fs");
+const File = require("../models/File");
+const User = require("../models/User");
+const authMiddleware = require("../middleware/authMiddleware");
+const { validateShareAccess } = require("../utils/shareAccess");
+
+const router = express.Router();
+
+async function formatSharedFileInfo(file) {
+    const owner = await User.findById(file.owner).select("username");
+    return {
+        id: file._id,
+        filename: file.filename,
+        fileSize: file.fileSize,
+        fileType: file.fileType,
+        uploadDate: file.uploadDate,
+        permission: file.sharePermission,
+        ownerUsername: owner?.username || "Unknown",
+        canDownload: file.sharePermission === "download",
+        shareExpiresAt: file.shareExpiresAt,
+        downloadsRemaining:
+            file.shareMaxDownloads != null
+                ? Math.max(0, file.shareMaxDownloads - file.shareDownloadCount)
+                : null,
+    };
+}
+
+router.get("/shared/:token", authMiddleware, async (req, res) => {
+    try {
+        const token = String(req.params.token || "").trim();
+        const file = await File.findOne({ shareToken: token });
+        const access = validateShareAccess(file);
+
+        if (!access.ok) {
+            return res.status(access.status).json({
+                message: access.message,
+                code: access.code,
+            });
+        }
+
+        if (String(access.file.owner) === String(req.user.id)) {
+            return res.status(400).json({
+                message: "You own this file. Open it from your library instead.",
+            });
+        }
+
+        res.status(200).json({
+            file: await formatSharedFileInfo(access.file),
+        });
+    } catch {
+        res.status(500).json({ message: "Could not load shared file" });
+    }
+});
+
+router.get("/shared/:token/download", authMiddleware, async (req, res) => {
+    try {
+        const token = String(req.params.token || "").trim();
+        const file = await File.findOne({ shareToken: token });
+        const access = validateShareAccess(file);
+
+        if (!access.ok) {
+            return res.status(access.status).json({
+                message: access.message,
+                code: access.code,
+            });
+        }
+
+        if (access.file.sharePermission === "view") {
+            return res.status(403).json({
+                message: "This link is view-only. Download is not allowed.",
+                code: "VIEW_ONLY",
+            });
+        }
+
+        if (!fs.existsSync(access.file.storagePath)) {
+            return res.status(404).json({ message: "File no longer exists on disk" });
+        }
+
+        access.file.shareDownloadCount += 1;
+        await access.file.save();
+
+        res.download(path.resolve(access.file.storagePath), access.file.filename);
+    } catch {
+        res.status(500).json({ message: "Could not download shared file" });
+    }
+});
+
+module.exports = router;
