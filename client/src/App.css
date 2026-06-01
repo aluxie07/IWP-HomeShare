@@ -102,7 +102,7 @@
 }
 
 .header-logo {
-  height: 30px;
+  height: 2.5rem;
   width: auto;
   display: block;
 }
@@ -135,7 +135,7 @@
   align-items: center;
   gap: 1rem;
   width: 100%;
-  max-width: 960px;
+  max-width: min(68rem, 92vw);
 }
 
 .auth-card {
@@ -180,7 +180,7 @@
   display: flex;
   align-items: center;
   gap: 2.5rem;
-  max-width: 960px;
+  max-width: min(68rem, 92vw);
   width: 100%;
   padding: 2.5rem;
   background: #fff;
@@ -210,7 +210,7 @@
 
 .home-hero-text {
   font-family: "Jost", sans-serif;
-  font-size: 1rem;
+  font-size: 1.125rem;
   line-height: 1.65;
   color: #333;
   margin: 0;
