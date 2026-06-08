@@ -19,6 +19,11 @@ const fileSchema = new mongoose.Schema({
         enum: ["download", "view"],
         default: "download",
     },
+    accessMode: {
+        type: String,
+        enum: ["private", "shared", "local_only"],
+        default: "private",
+    },
 });
 
 module.exports = mongoose.model("File", fileSchema);

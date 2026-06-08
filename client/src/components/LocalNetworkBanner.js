@@ -1,0 +1,48 @@
+function modeLabel(mode) {
+    switch (mode) {
+        case "local":
+            return "Local server (this computer)";
+        case "manual":
+            return "Local server (custom address)";
+        case "cloud":
+            return "Cloud server";
+        default:
+            return "Detecting…";
+    }
+}
+
+function LocalNetworkBanner({ apiMode, apiUrl, connected, onOpenSetup }) {
+    if (apiMode === "detecting") {
+        return null;
+    }
+
+    const isLocal = apiMode === "local" || apiMode === "manual";
+
+    return (
+        <div
+            className={`local-network-banner ${
+                isLocal && connected
+                    ? "local-network-banner--active"
+                    : "local-network-banner--cloud"
+            }`}
+        >
+            <div className="local-network-banner__text">
+                <strong>
+                    {isLocal && connected
+                        ? "Local Network Mode active"
+                        : "Cloud mode"}
+                </strong>
+                <span>
+                    {isLocal && connected
+                        ? ` Connected to ${apiUrl}. Local Only files and trusted-network features are available.`
+                        : " Download and run the local server to enable Local Network Mode on this site."}
+                </span>
+            </div>
+            <button type="button" className="local-network-banner__btn" onClick={onOpenSetup}>
+                {isLocal && connected ? "Local setup" : "Enable local mode"}
+            </button>
+        </div>
+    );
+}
+
+export default LocalNetworkBanner;

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import AuthHeader from "../components/AuthHeader";
 import GradientPageLayout from "../components/GradientPageLayout";
-import { API_URL } from "../utils/api";
+import { getApiUrl } from "../utils/api";
 
 function ForgotPassword({ onBackToLogin }) {
     const [email, setEmail] = useState("");
@@ -16,7 +16,7 @@ function ForgotPassword({ onBackToLogin }) {
         setSubmitting(true);
 
         try {
-            const res = await fetch(`${API_URL}/forgot-password`, {
+            const res = await fetch(`${getApiUrl()}/forgot-password`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email: email.trim() }),

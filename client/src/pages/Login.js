@@ -55,6 +55,7 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
                 saveAuth(data.token, {
                     username: data.username,
                     email,
+                    role: data.role || "user",
                 });
             }
 

@@ -15,6 +15,12 @@ const {
     getShareExpiry,
     buildShareUrl,
 } = require("../utils/shareAccess");
+const {
+    normalizeAccessMode,
+    allowsShareLinks,
+    assertFileNetworkAccess,
+    ACCESS_MODES,
+} = require("../utils/fileAccess");
 
 const router = express.Router();
 
@@ -25,6 +31,7 @@ function formatFile(file) {
         uploadDate: file.uploadDate,
         fileSize: file.fileSize,
         fileType: file.fileType,
+        accessMode: normalizeAccessMode(file.accessMode),
     };
 
     if (file.shareToken) {
@@ -79,6 +86,8 @@ router.post(
                 storagePath = undefined;
             }
 
+            const accessMode = normalizeAccessMode(req.body?.accessMode);
+
             const record = await File.create({
                 filename: req.file.originalname,
                 storedFilename,
@@ -88,6 +97,7 @@ router.post(
                 storageKind,
                 gridfsId,
                 storagePath,
+                accessMode,
             });
 
             if (!(await fileExists(record))) {
@@ -130,6 +140,14 @@ router.post("/files/:id/share", authMiddleware, async (req, res) => {
 
         if (!file) {
             return res.status(404).json({ message: "File not found" });
+        }
+
+        if (!allowsShareLinks(file)) {
+            return res.status(400).json({
+                message:
+                    "Private files cannot be shared. Change the access mode to Shared or Local Only first.",
+                code: "PRIVATE_FILE",
+            });
         }
 
         const { expiresInHours, maxDownloads, viewOnly } = req.body;
@@ -200,6 +218,43 @@ function fileUnavailableMessage(file) {
     return "File data is missing from storage. Upload the file again.";
 }
 
+router.patch("/files/:id/access-mode", authMiddleware, async (req, res) => {
+    try {
+        const file = await File.findOne({
+            _id: req.params.id,
+            owner: req.user.id,
+        });
+
+        if (!file) {
+            return res.status(404).json({ message: "File not found" });
+        }
+
+        const accessMode = normalizeAccessMode(req.body?.accessMode);
+        if (!ACCESS_MODES.includes(accessMode)) {
+            return res.status(400).json({
+                message: "Access mode must be private, shared, or local_only",
+            });
+        }
+
+        if (accessMode === "private" && file.shareToken) {
+            file.shareToken = undefined;
+            file.shareExpiresAt = undefined;
+            file.shareMaxDownloads = undefined;
+            file.shareDownloadCount = 0;
+        }
+
+        file.accessMode = accessMode;
+        await file.save();
+
+        res.status(200).json({
+            message: "Access mode updated",
+            file: formatFile(file),
+        });
+    } catch {
+        res.status(500).json({ message: "Could not update access mode" });
+    }
+});
+
 router.get("/files/:id/download", authMiddleware, requireMongo, async (req, res) => {
     try {
         const file = await File.findOne({
@@ -209,6 +264,17 @@ router.get("/files/:id/download", authMiddleware, requireMongo, async (req, res)
 
         if (!file) {
             return res.status(404).json({ message: "File not found" });
+        }
+
+        const networkCheck = assertFileNetworkAccess(file, {
+            isTrustedNetwork: req.isTrustedNetwork,
+            configured: req.trustedNetworkConfigured,
+        });
+        if (!networkCheck.ok) {
+            return res.status(networkCheck.status).json({
+                message: networkCheck.message,
+                code: networkCheck.code,
+            });
         }
 
         if (!(await fileExists(file))) {

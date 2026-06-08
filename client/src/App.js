@@ -14,6 +14,11 @@ import DeleteAccount from "./pages/DeleteAccount";
 import FileUpload from "./pages/FileUpload";
 import FileLibrary from "./pages/FileLibrary";
 import SharedFile from "./pages/SharedFile";
+import NetworkSettings from "./pages/NetworkSettings";
+import LocalNetworkSetup from "./pages/LocalNetworkSetup";
+import LocalNetworkBanner from "./components/LocalNetworkBanner";
+import { isAdmin } from "./utils/authStorage";
+import { initApiDiscovery } from "./utils/apiDiscovery";
 import {
     isLoggedIn as hasStoredAuth,
     clearAuth,
@@ -66,6 +71,21 @@ function App() {
     const [resetToken, setResetToken] = useState(initial.resetToken);
     const [shareToken, setShareToken] = useState(initial.shareToken);
     const [isLoggedIn, setIsLoggedIn] = useState(hasStoredAuth);
+    const [apiDiscovery, setApiDiscovery] = useState({
+        mode: "detecting",
+        url: "",
+        connected: false,
+    });
+
+    useEffect(() => {
+        initApiDiscovery().then((result) => {
+            setApiDiscovery({
+                mode: result.mode,
+                url: result.url,
+                connected: result.connected,
+            });
+        });
+    }, []);
 
     useEffect(() => {
         const verify = getVerifyTokenFromUrl();
@@ -132,6 +152,7 @@ function App() {
             "upload",
             "library",
             "shared-file",
+            "network-settings",
         ];
         if (protectedPages.includes(page) && !hasStoredAuth()) {
             setPage("login");
@@ -140,6 +161,12 @@ function App() {
 
     return (
         <div className="App">
+            <LocalNetworkBanner
+                apiMode={apiDiscovery.mode}
+                apiUrl={apiDiscovery.url}
+                connected={apiDiscovery.connected}
+                onOpenSetup={() => setPage("local-network-setup")}
+            />
             <Header
                 currentPage={page}
                 isLoggedIn={isLoggedIn}
@@ -166,6 +193,18 @@ function App() {
                     }
                     setPage("library");
                 }}
+                onSettingsClick={() => {
+                    if (!hasStoredAuth()) {
+                        setPage("login");
+                        return;
+                    }
+                    if (!isAdmin()) {
+                        setPage("dashboard");
+                        return;
+                    }
+                    setPage("network-settings");
+                }}
+                showSettings={isLoggedIn && isAdmin()}
                 onGetStarted={() => setPage("register")}
                 showGetStarted={!isLoggedIn}
             />
@@ -177,6 +216,7 @@ function App() {
                 {page === "home" && (
                     <Home
                         onGetStarted={() => setPage("register")}
+                        onLocalNetworkSetup={() => setPage("local-network-setup")}
                         showGetStarted={!isLoggedIn}
                     />
                 )}
@@ -219,6 +259,25 @@ function App() {
                         onDeleteAccount={() => setPage("delete-account")}
                         onGoToUpload={() => setPage("upload")}
                         onGoToLibrary={() => setPage("library")}
+                        onGoToNetworkSettings={() => setPage("network-settings")}
+                    />
+                )}
+                {page === "network-settings" && (
+                    <NetworkSettings
+                        onRedirectToLogin={redirectToLogin}
+                        onBack={() => setPage("dashboard")}
+                    />
+                )}
+                {page === "local-network-setup" && (
+                    <LocalNetworkSetup
+                        onBack={() => setPage(isLoggedIn ? "dashboard" : "home")}
+                        onDiscoveryUpdated={(result) =>
+                            setApiDiscovery({
+                                mode: result.mode,
+                                url: result.url,
+                                connected: result.connected,
+                            })
+                        }
                     />
                 )}
                 {page === "delete-account" && (

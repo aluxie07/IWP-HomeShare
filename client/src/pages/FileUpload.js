@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { API_URL, authHeaders, formatFileSize, formatUploadDate } from "../utils/api";
+import NetworkStatusIndicator from "../components/NetworkStatusIndicator";
+import { getApiUrl, authHeaders, formatFileSize, formatUploadDate } from "../utils/api";
+import { ACCESS_MODES, getAccessModeLabel } from "../utils/accessModes";
 
 function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
     const [selectedFile, setSelectedFile] = useState(null);
@@ -8,11 +10,12 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
     const [uploading, setUploading] = useState(false);
     const [files, setFiles] = useState([]);
     const [loadingList, setLoadingList] = useState(true);
+    const [accessMode, setAccessMode] = useState("private");
 
     const loadFiles = useCallback(async () => {
         setLoadingList(true);
         try {
-            const res = await fetch(`${API_URL}/files`, {
+            const res = await fetch(`${getApiUrl()}/files`, {
                 headers: authHeaders(),
             });
 
@@ -56,11 +59,12 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
 
         const formData = new FormData();
         formData.append("file", selectedFile);
+        formData.append("accessMode", accessMode);
 
         setUploading(true);
 
         try {
-            const res = await fetch(`${API_URL}/files/upload`, {
+            const res = await fetch(`${getApiUrl()}/files/upload`, {
                 method: "POST",
                 headers: authHeaders(),
                 body: formData,
@@ -99,8 +103,10 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
                 <h2 className="auth-title">Upload file</h2>
                 <p className="files-page-intro">
                     Choose a file from your computer and upload it to your HomeShare
-                    library.
+                    library. Set an access mode to control who can reach the file.
                 </p>
+
+                <NetworkStatusIndicator compact />
 
                 <form className="file-upload-form" onSubmit={handleUpload}>
                     <label className="file-upload-label" htmlFor="file-upload-input">
@@ -118,6 +124,23 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
                             {formatFileSize(selectedFile.size)})
                         </p>
                     )}
+                    <label className="share-modal-label file-access-mode-label">
+                        Access mode
+                        <select
+                            className="file-access-mode-select"
+                            value={accessMode}
+                            onChange={(e) => setAccessMode(e.target.value)}
+                        >
+                            {ACCESS_MODES.map((mode) => (
+                                <option key={mode.value} value={mode.value}>
+                                    {mode.label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    <p className="file-access-mode-hint">
+                        {ACCESS_MODES.find((m) => m.value === accessMode)?.description}
+                    </p>
                     <button
                         type="submit"
                         className="logout-btn file-upload-submit"
@@ -149,6 +172,7 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
                                 <li key={file.id} className="file-list-item">
                                     <span className="file-list-name">{file.filename}</span>
                                     <span className="file-list-meta">
+                                        {getAccessModeLabel(file.accessMode)} ·{" "}
                                         {formatFileSize(file.fileSize)} ·{" "}
                                         {formatUploadDate(file.uploadDate)}
                                     </span>

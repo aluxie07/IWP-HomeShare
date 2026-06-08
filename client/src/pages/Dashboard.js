@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { API_URL } from "../utils/api";
-import { getToken, getUser } from "../utils/authStorage";
+import NetworkStatusIndicator from "../components/NetworkStatusIndicator";
+import { getApiUrl } from "../utils/api";
+import { getToken, getUser, saveAuth } from "../utils/authStorage";
 
 function Dashboard({
     onRedirectToLogin,
@@ -8,9 +9,11 @@ function Dashboard({
     onDeleteAccount,
     onGoToUpload,
     onGoToLibrary,
+    onGoToNetworkSettings,
 }) {
     const [message, setMessage] = useState("");
     const [user, setUser] = useState(() => getUser());
+    const [network, setNetwork] = useState(null);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(true);
 
@@ -24,7 +27,7 @@ function Dashboard({
 
         async function loadDashboard() {
             try {
-                const res = await fetch(`${API_URL}/dashboard`, {
+                const res = await fetch(`${getApiUrl()}/dashboard`, {
                     headers: {
                         Authorization: `Bearer ${token}`,
                     },
@@ -45,6 +48,10 @@ function Dashboard({
                 setMessage(data.message);
                 if (data.user) {
                     setUser(data.user);
+                    saveAuth(token, data.user);
+                }
+                if (data.network) {
+                    setNetwork(data.network);
                 }
             } catch {
                 setError("Could not reach server. Is the backend running?");
@@ -73,8 +80,36 @@ function Dashboard({
                                 <p>
                                     <strong>Email:</strong> {user.email}
                                 </p>
+                                {user.role === "admin" && (
+                                    <p>
+                                        <strong>Role:</strong> Administrator
+                                    </p>
+                                )}
                             </div>
                         )}
+                        <div className="dashboard-network-panel">
+                            <h3 className="dashboard-network-title">Local network status</h3>
+                            <NetworkStatusIndicator
+                                initialStatus={
+                                    network
+                                        ? {
+                                              configured: network.configured,
+                                              isTrustedNetwork: network.isTrustedNetwork,
+                                              accessLevel: network.accessLevel,
+                                              clientIp: network.clientIp,
+                                              trustedNetwork: null,
+                                              capabilities: {
+                                                  localOnlyAccess:
+                                                      network.configured &&
+                                                      network.isTrustedNetwork,
+                                                  sharedAccess: true,
+                                                  privateAccess: true,
+                                              },
+                                          }
+                                        : null
+                                }
+                            />
+                        </div>
                     </>
                 )}
                 <div className="dashboard-file-links">
@@ -89,6 +124,15 @@ function Dashboard({
                         File library
                     </button>
                 </div>
+                {user?.role === "admin" && (
+                    <button
+                        type="button"
+                        className="auth-form__secondary-btn dashboard-network-settings-btn"
+                        onClick={onGoToNetworkSettings}
+                    >
+                        Manage trusted network
+                    </button>
+                )}
                 <div className="dashboard-actions">
                     <button type="button" className="logout-btn" onClick={onLogout}>
                         Logout

@@ -70,11 +70,24 @@ Optional: `ALLOWED_ORIGINS` — comma-separated extra origins (e.g. `https://YOU
 
 Render env vars must include: `MONGO_URI`, `JWT_SECRET`, `RECAPTCHA_SECRET_KEY`, `CLIENT_URL`, and matching SMTP keys if using email.
 
-## 5. Activation emails in production
+## 5. Local Network Mode (Week 6)
+
+Trusted-network detection compares each request’s IP to a subnet stored in MongoDB (registered by an **administrator** under **Network** in the app).
+
+- Works when the **API runs on your LAN** (e.g. `http://192.168.1.x:8080`) and clients use that same network.
+- **Render / cloud hosting** sees public internet IPs, not your home Wi-Fi subnet — use Local Network Mode for **local or on-prem** deployments, or lab testing with `ALLOWED_ORIGINS` including your LAN frontend URL.
+- First registered user becomes **admin**, or set `ADMIN_EMAIL` on the server to promote an account.
+- Optional: `FILE_STORAGE=disk` for fully local file storage.
+
+### Local mode from GitHub Pages
+
+The site can **auto-detect** a server on `http://127.0.0.1:8080` when users run the downloadable starter (`client/public/downloads/`). Users click **Enable Local Network Mode** on the home page, download the `.bat` / `.sh` file, run it once, then **Detect local server**. Edit `YOUR_USERNAME` in the starter scripts before publishing.
+
+## 6. Activation emails in production
 
 Set `CLIENT_URL` on the backend to your GitHub Pages URL so activation links open the live site, not `localhost`.
 
-## Local vs production
+## 7. Local vs production
 
 | | Local | GitHub Pages |
 |--|--------|----------------|
