@@ -24,6 +24,11 @@ export function isLoggedIn() {
     return Boolean(getToken());
 }
 
+export function isAdmin() {
+    const user = getUser();
+    return user?.role === "admin";
+}
+
 export function clearAuth() {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);

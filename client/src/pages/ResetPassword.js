@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import AuthHeader from "../components/AuthHeader";
 import GradientPageLayout from "../components/GradientPageLayout";
-import { API_URL } from "../utils/api";
+import { getApiUrl } from "../utils/api";
 import { PASSWORD_PATTERN, PASSWORD_RULE } from "../constants/password";
 
 function ResetPassword({ token, onGoToLogin }) {
@@ -23,7 +23,7 @@ function ResetPassword({ token, onGoToLogin }) {
         const validate = async () => {
             try {
                 const res = await fetch(
-                    `${API_URL}/reset-password/validate?token=${encodeURIComponent(token.trim())}`
+                    `${getApiUrl()}/reset-password/validate?token=${encodeURIComponent(token.trim())}`
                 );
                 const data = await res.json();
                 if (!cancelled) {
@@ -60,7 +60,7 @@ function ResetPassword({ token, onGoToLogin }) {
         setSubmitting(true);
 
         try {
-            const res = await fetch(`${API_URL}/reset-password`, {
+            const res = await fetch(`${getApiUrl()}/reset-password`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ token: token.trim(), password }),

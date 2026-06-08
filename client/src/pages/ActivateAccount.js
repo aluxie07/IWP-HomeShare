@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import GradientPageLayout from "../components/GradientPageLayout";
-import { API_URL } from "../utils/api";
+import { getApiUrl } from "../utils/api";
 
 function ActivateAccount({ token, onGoToLogin }) {
     const [status, setStatus] = useState("loading");
@@ -17,7 +17,7 @@ function ActivateAccount({ token, onGoToLogin }) {
         const verify = async () => {
             try {
                 const res = await fetch(
-                    `${API_URL}/verify-email?token=${encodeURIComponent(token.trim())}`
+                    `${getApiUrl()}/verify-email?token=${encodeURIComponent(token.trim())}`
                 );
                 const data = await res.json();
 

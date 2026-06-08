@@ -9,6 +9,10 @@ const requireMongo = require("../middleware/requireMongo");
 const User = require("../models/User");
 const authMiddleware = require("../middleware/authMiddleware");
 const { validateShareAccess } = require("../utils/shareAccess");
+const {
+    normalizeAccessMode,
+    assertFileNetworkAccess,
+} = require("../utils/fileAccess");
 
 const router = express.Router();
 
@@ -21,6 +25,7 @@ async function formatSharedFileInfo(file) {
         fileType: file.fileType,
         uploadDate: file.uploadDate,
         permission: file.sharePermission,
+        accessMode: normalizeAccessMode(file.accessMode),
         ownerUsername: owner?.username || "Unknown",
         canDownload: file.sharePermission === "download",
         shareExpiresAt: file.shareExpiresAt,
@@ -50,8 +55,25 @@ router.get("/shared/:token", authMiddleware, async (req, res) => {
             });
         }
 
+        const fileInfo = await formatSharedFileInfo(access.file);
+        const networkCheck = assertFileNetworkAccess(access.file, {
+            isTrustedNetwork: req.isTrustedNetwork,
+            configured: req.trustedNetworkConfigured,
+        });
+
+        if (!networkCheck.ok) {
+            fileInfo.canDownload = false;
+            fileInfo.networkBlocked = true;
+            fileInfo.networkMessage = networkCheck.message;
+        }
+
         res.status(200).json({
-            file: await formatSharedFileInfo(access.file),
+            file: fileInfo,
+            network: {
+                configured: req.trustedNetworkConfigured,
+                isTrustedNetwork: req.isTrustedNetwork,
+                accessLevel: req.networkAccessLevel,
+            },
         });
     } catch {
         res.status(500).json({ message: "Could not load shared file" });
@@ -75,6 +97,17 @@ router.get("/shared/:token/download", authMiddleware, requireMongo, async (req, 
             return res.status(403).json({
                 message: "This link is view-only. Download is not allowed.",
                 code: "VIEW_ONLY",
+            });
+        }
+
+        const networkCheck = assertFileNetworkAccess(access.file, {
+            isTrustedNetwork: req.isTrustedNetwork,
+            configured: req.trustedNetworkConfigured,
+        });
+        if (!networkCheck.ok) {
+            return res.status(networkCheck.status).json({
+                message: networkCheck.message,
+                code: networkCheck.code,
             });
         }
 

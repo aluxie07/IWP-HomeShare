@@ -10,6 +10,8 @@ const dashboardRoutes = require("./routes/dashboard");
 const accountRoutes = require("./routes/account");
 const fileRoutes = require("./routes/files");
 const shareRoutes = require("./routes/shares");
+const networkRoutes = require("./routes/network");
+const attachNetworkContext = require("./middleware/attachNetworkContext");
 const {
     isEmailConfigured,
     getMissingEmailVars,
@@ -20,6 +22,7 @@ const { verifySmtpConnection } = require("./utils/mailer");
 const { shouldUseGridFS } = require("./utils/fileStorage");
 
 const app = express();
+app.set("trust proxy", 1);
 
 function getAllowedOrigins() {
     const origins = new Set([
@@ -59,11 +62,13 @@ app.use(
     })
 );
 app.use(express.json());
+app.use(attachNetworkContext);
 app.use(authRoutes);
 app.use(dashboardRoutes);
 app.use(accountRoutes);
 app.use(fileRoutes);
 app.use(shareRoutes);
+app.use(networkRoutes);
 
 mongoose
     .connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000 })

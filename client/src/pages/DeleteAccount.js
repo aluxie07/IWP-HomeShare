@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { API_URL } from "../utils/api";
+import { getApiUrl } from "../utils/api";
 import { clearAuth, getToken } from "../utils/authStorage";
 
 function DeleteAccount({ onCancel, onAccountDeleted }) {
@@ -20,7 +20,7 @@ function DeleteAccount({ onCancel, onAccountDeleted }) {
         setSubmitting(true);
 
         try {
-            const res = await fetch(`${API_URL}/account`, {
+            const res = await fetch(`${getApiUrl()}/account`, {
                 method: "DELETE",
                 headers: {
                     "Content-Type": "application/json",
