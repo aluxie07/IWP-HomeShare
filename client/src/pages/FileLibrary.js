@@ -7,7 +7,7 @@ import {
     formatFileSize,
     formatUploadDate,
 } from "../utils/api";
-import { ACCESS_MODES, canShareFile, getAccessModeLabel } from "../utils/accessModes";
+import { ACCESS_MODES, canShareFile } from "../utils/accessModes";
 
 function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
     const [files, setFiles] = useState([]);

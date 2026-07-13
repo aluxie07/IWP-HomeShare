@@ -1,16 +1,3 @@
-function modeLabel(mode) {
-    switch (mode) {
-        case "local":
-            return "Local server (this computer)";
-        case "manual":
-            return "Local server (custom address)";
-        case "cloud":
-            return "Cloud server";
-        default:
-            return "Detecting…";
-    }
-}
-
 function LocalNetworkBanner({ apiMode, apiUrl, connected, onOpenSetup }) {
     if (apiMode === "detecting") {
         return null;
