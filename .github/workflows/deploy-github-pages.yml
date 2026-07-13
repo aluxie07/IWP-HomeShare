@@ -26,14 +26,35 @@ jobs:
           cache: npm
           cache-dependency-path: server/package-lock.json
 
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
       - name: Build HomeShare Local ZIP
         working-directory: server
         run: npm run build:local-package
 
+      - name: Build HomeShare Local EXE
+        working-directory: server
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          npm run build:local-exe
+          if (Test-Path ../dist/local/HomeShare-Local.exe) {
+            New-Item -ItemType Directory -Force -Path ../client/public/downloads | Out-Null
+            Copy-Item ../dist/local/HomeShare-Local.exe ../client/public/downloads/HomeShare-Local.exe -Force
+            Write-Host "EXE copied to client/public/downloads"
+          } else {
+            Write-Host "EXE was not produced"
+          }
+
       - uses: actions/upload-artifact@v4
         with:
           name: homeshare-local-zip
-          path: client/public/downloads/HomeShare-Local-Windows.zip
+          path: |
+            client/public/downloads/HomeShare-Local-Windows.zip
+            client/public/downloads/HomeShare-Local.exe
+          if-no-files-found: warn
           retention-days: 1
 
   build:

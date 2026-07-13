@@ -12,6 +12,7 @@ const PUBLIC = process.env.PUBLIC_URL || "";
 const LOCAL_ZIP_PATH = `${PUBLIC}/downloads/HomeShare-Local-Windows.zip`;
 const LOCAL_ZIP_URL =
     process.env.REACT_APP_LOCAL_PACKAGE_URL || LOCAL_ZIP_PATH;
+const LOCAL_EXE_URL = `${PUBLIC}/downloads/HomeShare-Local.exe`;
 
 function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
     const [apiMode, setApiMode] = useState(getApiMode());
@@ -22,6 +23,7 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
     const [isError, setIsError] = useState(false);
     const [checking, setChecking] = useState(false);
     const [zipAvailable, setZipAvailable] = useState(null);
+    const [exeAvailable, setExeAvailable] = useState(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -35,6 +37,18 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
             .catch(() => {
                 if (!cancelled) {
                     setZipAvailable(false);
+                }
+            });
+
+        fetch(LOCAL_EXE_URL, { method: "HEAD" })
+            .then((res) => {
+                if (!cancelled) {
+                    setExeAvailable(res.ok);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setExeAvailable(false);
                 }
             });
 
@@ -176,13 +190,15 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                         >
                             Download HomeShare Local (.zip)
                         </a>
-                        <a
-                            className="auth-form__secondary-btn local-setup-download-btn"
-                            href={`${PUBLIC}/downloads/HomeShare-Local.exe`}
-                            download="HomeShare-Local.exe"
-                        >
-                            Or single .exe (if available)
-                        </a>
+                        {exeAvailable && (
+                            <a
+                                className="auth-form__secondary-btn local-setup-download-btn"
+                                href={LOCAL_EXE_URL}
+                                download="HomeShare-Local.exe"
+                            >
+                                Download single .exe
+                            </a>
+                        )}
                         <a
                             className="files-link-btn"
                             href={`${PUBLIC}/downloads/local-network-readme.txt`}
@@ -191,6 +207,13 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                             Setup instructions (.txt)
                         </a>
                     </div>
+                    {exeAvailable === false && zipAvailable !== false && (
+                        <p className="files-muted">
+                            Use the <strong>.zip</strong> for now (recommended). It includes
+                            everything and the setup popup. A single .exe is built by CI when
+                            possible and will appear here automatically.
+                        </p>
+                    )}
                     {zipAvailable === false && (
                         <p className="error local-setup-missing-zip">
                             <strong>Package not on this server yet.</strong> If you run the
@@ -221,10 +244,9 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                     <h3 className="files-section-title">Step 2 — Unzip and run</h3>
                     <p className="files-muted">
                         Unzip the download, then double-click{" "}
-                        <strong>Start HomeShare.bat</strong> (or{" "}
-                        <strong>HomeShare-Local.exe</strong> when available). On first run a
-                        setup window asks for your <code>MONGO_URI</code> and optional admin
-                        email — then the server starts. Keep the window open.
+                        <strong>Start HomeShare.bat</strong>. On first run a setup window asks
+                        for your <code>MONGO_URI</code> and optional admin email — then the
+                        server starts. Keep the window open.
                     </p>
 
                     <h3 className="files-section-title">Step 3 — Detect local server</h3>
