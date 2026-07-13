@@ -5,13 +5,43 @@ const mongoose = require("mongoose");
 const { GridFSBucket, ObjectId } = require("mongodb");
 const { uploadsDir } = require("./storagePaths");
 const { getDataDir, getUploadsDir, ensureUploadsDir } = require("./appPaths");
+const {
+    areCloudShardsConfigured,
+    saveToCloudShards,
+    loadFromCloudShards,
+    cloudShardsExist,
+    deleteCloudShards,
+} = require("./cloudShards");
 
 const GRIDFS_BUCKET = "homeshare_files";
 
-/** GridFS in MongoDB by default so files work on Render and match Atlas. Set FILE_STORAGE=disk for local-only disk. */
+/**
+ * Storage modes:
+ * - disk   → Local Network Mode / Explorer folder
+ * - shards → erasure-coded fragments on R2 + B2 + E2 (default when configured)
+ * - gridfs → legacy MongoDB GridFS
+ */
+function getStorageMode() {
+    const mode = (process.env.FILE_STORAGE || "").trim().toLowerCase();
+    if (mode === "disk" || mode === "shards" || mode === "gridfs") {
+        return mode;
+    }
+    if (areCloudShardsConfigured()) {
+        return "shards";
+    }
+    return "gridfs";
+}
+
 function shouldUseGridFS() {
-    const mode = (process.env.FILE_STORAGE || "gridfs").trim().toLowerCase();
-    return mode !== "disk";
+    return getStorageMode() === "gridfs";
+}
+
+function shouldUseCloudShards() {
+    return getStorageMode() === "shards";
+}
+
+function shouldUseDisk() {
+    return getStorageMode() === "disk";
 }
 
 function makeStoredFilename(originalname) {
@@ -19,7 +49,6 @@ function makeStoredFilename(originalname) {
     return `${Date.now()}-${crypto.randomBytes(8).toString("hex")}${ext}`;
 }
 
-/** Readable names for File Explorer (Local Network Mode disk storage). */
 function makeExplorerFilename(originalname) {
     const dir = ensureUploadsDir();
     const raw = path.basename(originalname || "file");
@@ -65,6 +94,10 @@ function toObjectId(value) {
 
 function isGridfsRecord(file) {
     return file.storageKind === "gridfs" || Boolean(file.gridfsId);
+}
+
+function isShardsRecord(file) {
+    return file.storageKind === "shards" || (file.shards && file.shards.length > 0);
 }
 
 function resolveDiskPath(file) {
@@ -113,7 +146,6 @@ function isForeignDiskPath(storagePath) {
         return false;
     }
 
-    // Absolute path from another machine/environment (e.g. uploaded on Render disk, opened locally)
     return path.isAbsolute(storagePath);
 }
 
@@ -142,6 +174,10 @@ async function saveToGridFS(storedFilename, buffer, contentType) {
 }
 
 async function fileExists(file) {
+    if (isShardsRecord(file)) {
+        return cloudShardsExist(file);
+    }
+
     if (isGridfsRecord(file)) {
         try {
             const bucket = getBucket();
@@ -170,52 +206,75 @@ async function fileExists(file) {
 }
 
 function streamFileToResponse(file, res, downloadName) {
-    return new Promise((resolve, reject) => {
-        if (isGridfsRecord(file)) {
-            const bucket = getBucket();
-            const id = toObjectId(file.gridfsId);
-            const downloadStream = id
-                ? bucket.openDownloadStream(id)
-                : bucket.openDownloadStreamByName(file.storedFilename);
-
-            downloadStream.on("error", reject);
-
-            res.setHeader(
-                "Content-Disposition",
-                `attachment; filename="${downloadName.replace(/"/g, "")}"`
-            );
-            if (file.fileType) {
-                res.setHeader("Content-Type", file.fileType);
-            }
-
-            downloadStream.pipe(res);
-            res.on("finish", resolve);
-            res.on("close", resolve);
-            return;
-        }
-
-        if (isForeignDiskPath(file.storagePath)) {
-            reject(new Error("FILE_FOREIGN_PATH"));
-            return;
-        }
-
-        const diskPath = resolveDiskPath(file);
-        if (!fs.existsSync(diskPath)) {
-            reject(new Error("FILE_MISSING"));
-            return;
-        }
-
-        res.download(path.resolve(diskPath), downloadName, (err) => {
-            if (err) {
-                reject(err);
-            } else {
+    return new Promise(async (resolve, reject) => {
+        try {
+            if (isShardsRecord(file)) {
+                const buffer = await loadFromCloudShards(file);
+                res.setHeader(
+                    "Content-Disposition",
+                    `attachment; filename="${downloadName.replace(/"/g, "")}"`
+                );
+                if (file.fileType) {
+                    res.setHeader("Content-Type", file.fileType);
+                }
+                res.setHeader("Content-Length", buffer.length);
+                res.end(buffer);
                 resolve();
+                return;
             }
-        });
+
+            if (isGridfsRecord(file)) {
+                const bucket = getBucket();
+                const id = toObjectId(file.gridfsId);
+                const downloadStream = id
+                    ? bucket.openDownloadStream(id)
+                    : bucket.openDownloadStreamByName(file.storedFilename);
+
+                downloadStream.on("error", reject);
+
+                res.setHeader(
+                    "Content-Disposition",
+                    `attachment; filename="${downloadName.replace(/"/g, "")}"`
+                );
+                if (file.fileType) {
+                    res.setHeader("Content-Type", file.fileType);
+                }
+
+                downloadStream.pipe(res);
+                res.on("finish", resolve);
+                res.on("close", resolve);
+                return;
+            }
+
+            if (isForeignDiskPath(file.storagePath)) {
+                reject(new Error("FILE_FOREIGN_PATH"));
+                return;
+            }
+
+            const diskPath = resolveDiskPath(file);
+            if (!fs.existsSync(diskPath)) {
+                reject(new Error("FILE_MISSING"));
+                return;
+            }
+
+            res.download(path.resolve(diskPath), downloadName, (err) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        } catch (err) {
+            reject(err);
+        }
     });
 }
 
 async function deleteStoredFile(file) {
+    if (isShardsRecord(file)) {
+        await deleteCloudShards(file);
+    }
+
     if (isGridfsRecord(file) && file.gridfsId) {
         try {
             const bucket = getBucket();
@@ -236,13 +295,18 @@ async function deleteStoredFile(file) {
 }
 
 module.exports = {
+    getStorageMode,
     shouldUseGridFS,
+    shouldUseCloudShards,
+    shouldUseDisk,
     makeStoredFilename,
     makeExplorerFilename,
     saveToGridFS,
+    saveToCloudShards,
     fileExists,
     streamFileToResponse,
     deleteStoredFile,
     uploadsDir,
     isForeignDiskPath,
+    areCloudShardsConfigured,
 };

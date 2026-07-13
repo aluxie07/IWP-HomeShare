@@ -1,5 +1,6 @@
 if (!process.env.HOMESHARE_DATA_DIR) {
     require("dotenv").config();
+    require("dotenv").config({ path: require("path").join(__dirname, ".env.shards") });
 }
 
 // Local disk mode: create HomeShare Explorer folder BEFORE loading upload routes
@@ -34,7 +35,7 @@ const {
     getEmailDiagnostics,
 } = require("./utils/emailConfig");
 const { verifySmtpConnection } = require("./utils/mailer");
-const { shouldUseGridFS } = require("./utils/fileStorage");
+const { getStorageMode, shouldUseDisk, areCloudShardsConfigured } = require("./utils/fileStorage");
 const { isRecaptchaRequired } = require("./middleware/verifyRecaptcha");
 const { getUploadsDir } = require("./utils/appPaths");
 const { migrateLegacyUploadsToExplorer } = require("./utils/migrateUploads");
@@ -173,11 +174,18 @@ const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Email: provider = ${getEmailProvider()}`);
+    const storageMode = getStorageMode();
+    const storageLabel =
+        storageMode === "disk"
+            ? "local disk"
+            : storageMode === "shards"
+              ? "erasure shards (R2+B2+E2)"
+              : "gridfs (MongoDB)";
     console.log(
-        `Files: storage = ${shouldUseGridFS() ? "gridfs (MongoDB)" : "local disk"} (FILE_STORAGE=${process.env.FILE_STORAGE || "gridfs"})`
+        `Files: storage = ${storageLabel} (FILE_STORAGE=${process.env.FILE_STORAGE || "auto"}, shardsConfigured=${areCloudShardsConfigured()})`
     );
 
-    if (!shouldUseGridFS()) {
+    if (shouldUseDisk()) {
         console.log(`Files: upload folder = ${getUploadsDir()}`);
         migrateLegacyUploadsToExplorer()
             .then(({ moved, targetDir }) => {

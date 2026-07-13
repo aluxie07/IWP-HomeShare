@@ -2,6 +2,8 @@ node_modules/
 .env
 .env.*
 !.env.example
+!.env.shards.example
+server/.env.shards
 server/node_modules/
 client/node_modules/
 client/build/

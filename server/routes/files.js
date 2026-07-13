@@ -1,15 +1,17 @@
 const express = require("express");
 const fs = require("fs");
+const mongoose = require("mongoose");
 const File = require("../models/File");
 const authMiddleware = require("../middleware/authMiddleware");
 const { runUpload, getMaxFileSize, makeStoredFilename } = require("../middleware/upload");
 const requireMongo = require("../middleware/requireMongo");
 const {
     saveToGridFS,
+    saveToCloudShards,
     fileExists,
     streamFileToResponse,
     isForeignDiskPath,
-    shouldUseGridFS,
+    shouldUseDisk,
     deleteStoredFile,
 } = require("../utils/fileStorage");
 const {
@@ -87,13 +89,25 @@ router.post(
             let storageKind = "disk";
             let storagePath = req.file.path;
             let gridfsId;
+            let shards;
+            let shardMeta;
+            const fileId = new mongoose.Types.ObjectId();
 
             // Prevent folder watcher from importing this upload as a duplicate
             if (storagePath) {
                 markInternalWrite(storagePath);
             }
 
-            if (req.fileStorageMode === "gridfs") {
+            if (req.fileStorageMode === "shards") {
+                const shardResult = await saveToCloudShards(
+                    String(fileId),
+                    req.file.buffer
+                );
+                storageKind = shardResult.storageKind;
+                shards = shardResult.shards;
+                shardMeta = shardResult.shardMeta;
+                storagePath = undefined;
+            } else if (req.fileStorageMode === "gridfs") {
                 const gridMeta = await saveToGridFS(
                     storedFilename,
                     req.file.buffer,
@@ -106,8 +120,8 @@ router.post(
 
             const accessMode = normalizeAccessMode(req.body?.accessMode);
 
-            // Local disk / Local Network Mode: always mirror into HomeShare Explorer folder
-            if (storageKind === "disk" || !shouldUseGridFS()) {
+            // Local disk / Local Network Mode: mirror into HomeShare Explorer folder
+            if (storageKind === "disk" || shouldUseDisk()) {
                 try {
                     const synced = syncUploadToExplorer({
                         sourcePath: req.file.path,
@@ -117,8 +131,6 @@ router.post(
                     });
                     storageKind = "disk";
                     storagePath = synced.explorerPath;
-                    // Keep DB storedFilename aligned with Explorer file name
-                    // so downloads resolve correctly
                     console.log(
                         `[HomeShare] Synced upload to Explorer: ${synced.explorerPath}`
                     );
@@ -130,6 +142,7 @@ router.post(
             }
 
             const record = await File.create({
+                _id: fileId,
                 filename: req.file.originalname,
                 storedFilename: storagePath
                     ? path.basename(storagePath)
@@ -140,6 +153,8 @@ router.post(
                 storageKind,
                 gridfsId,
                 storagePath,
+                shards,
+                shardMeta,
                 accessMode,
             });
 
@@ -176,7 +191,7 @@ router.get("/files", authMiddleware, async (req, res) => {
 
 router.post("/files/sync-folder", authMiddleware, requireMongo, async (req, res) => {
     try {
-        if (shouldUseGridFS()) {
+        if (!shouldUseDisk()) {
             return res.status(200).json({
                 message: "Folder sync is only available in local disk mode",
                 imported: 0,
@@ -285,7 +300,10 @@ function fileUnavailableMessage(file) {
     if (isForeignDiskPath(file.storagePath)) {
         return "This file was uploaded from a different environment. Upload it again on the live site.";
     }
-    if (file.storageKind !== "gridfs" && !file.gridfsId) {
+    if (file.storageKind === "shards") {
+        return "Could not rebuild this file from cloud shards (need at least 3 fragments). Try again later.";
+    }
+    if (file.storageKind !== "gridfs" && !file.gridfsId && file.storageKind !== "shards") {
         return "This file was stored on server disk and is no longer available. Upload it again.";
     }
     return "File data is missing from storage. Upload the file again.";
