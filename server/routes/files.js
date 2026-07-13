@@ -9,7 +9,16 @@ const {
     fileExists,
     streamFileToResponse,
     isForeignDiskPath,
+    shouldUseGridFS,
+    deleteStoredFile,
 } = require("../utils/fileStorage");
+const {
+    syncUploadToExplorer,
+    removeExplorerFile,
+    markInternalWrite,
+} = require("../utils/explorerSync");
+const { reconcileExplorerFolder } = require("../utils/explorerReconcile");
+const path = require("path");
 const {
     generateShareToken,
     getShareExpiry,
@@ -75,6 +84,11 @@ router.post(
             let storagePath = req.file.path;
             let gridfsId;
 
+            // Prevent folder watcher from importing this upload as a duplicate
+            if (storagePath) {
+                markInternalWrite(storagePath);
+            }
+
             if (req.fileStorageMode === "gridfs") {
                 const gridMeta = await saveToGridFS(
                     storedFilename,
@@ -88,9 +102,34 @@ router.post(
 
             const accessMode = normalizeAccessMode(req.body?.accessMode);
 
+            // Local disk / Local Network Mode: always mirror into HomeShare Explorer folder
+            if (storageKind === "disk" || !shouldUseGridFS()) {
+                try {
+                    const synced = syncUploadToExplorer({
+                        sourcePath: req.file.path,
+                        buffer: req.file.buffer,
+                        originalname: req.file.originalname,
+                        storedFilename,
+                    });
+                    storageKind = "disk";
+                    storagePath = synced.explorerPath;
+                    // Keep DB storedFilename aligned with Explorer file name
+                    // so downloads resolve correctly
+                    console.log(
+                        `[HomeShare] Synced upload to Explorer: ${synced.explorerPath}`
+                    );
+                } catch (syncErr) {
+                    console.warn(
+                        `[HomeShare] Explorer sync failed: ${syncErr.message}`
+                    );
+                }
+            }
+
             const record = await File.create({
                 filename: req.file.originalname,
-                storedFilename,
+                storedFilename: storagePath
+                    ? path.basename(storagePath)
+                    : storedFilename,
                 owner: req.user.id,
                 fileSize: req.file.size,
                 fileType: req.file.mimetype,
@@ -128,6 +167,36 @@ router.get("/files", authMiddleware, async (req, res) => {
         });
     } catch {
         res.status(500).json({ message: "Could not load files" });
+    }
+});
+
+router.post("/files/sync-folder", authMiddleware, requireMongo, async (req, res) => {
+    try {
+        if (shouldUseGridFS()) {
+            return res.status(200).json({
+                message: "Folder sync is only available in local disk mode",
+                imported: 0,
+                removed: 0,
+                skipped: true,
+            });
+        }
+
+        const result = await reconcileExplorerFolder(req.user.id);
+        const files = await File.find({ owner: req.user.id }).sort({
+            uploadDate: -1,
+        });
+
+        res.status(200).json({
+            message:
+                result.imported || result.removed
+                    ? `Synced: ${result.imported} added, ${result.removed} removed`
+                    : "Library is up to date with HomeShare\\Files",
+            ...result,
+            files: files.map(formatFile),
+        });
+    } catch (err) {
+        console.error("[HomeShare] Folder sync failed:", err.message);
+        res.status(500).json({ message: "Could not sync Explorer folder" });
     }
 });
 
@@ -252,6 +321,28 @@ router.patch("/files/:id/access-mode", authMiddleware, async (req, res) => {
         });
     } catch {
         res.status(500).json({ message: "Could not update access mode" });
+    }
+});
+
+router.delete("/files/:id", authMiddleware, requireMongo, async (req, res) => {
+    try {
+        const file = await File.findOne({
+            _id: req.params.id,
+            owner: req.user.id,
+        });
+
+        if (!file) {
+            return res.status(404).json({ message: "File not found" });
+        }
+
+        removeExplorerFile(file);
+        await deleteStoredFile(file);
+        await file.deleteOne();
+
+        res.status(200).json({ message: "File deleted" });
+    } catch (err) {
+        console.error("[HomeShare] Delete failed:", err.message);
+        res.status(500).json({ message: "Could not delete file" });
     }
 });
 

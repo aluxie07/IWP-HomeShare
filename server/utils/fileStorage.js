@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const mongoose = require("mongoose");
 const { GridFSBucket, ObjectId } = require("mongodb");
 const { uploadsDir } = require("./storagePaths");
+const { getDataDir, getUploadsDir, ensureUploadsDir } = require("./appPaths");
 
 const GRIDFS_BUCKET = "homeshare_files";
 
@@ -16,6 +17,23 @@ function shouldUseGridFS() {
 function makeStoredFilename(originalname) {
     const ext = path.extname(originalname || "");
     return `${Date.now()}-${crypto.randomBytes(8).toString("hex")}${ext}`;
+}
+
+/** Readable names for File Explorer (Local Network Mode disk storage). */
+function makeExplorerFilename(originalname) {
+    const dir = ensureUploadsDir();
+    const raw = path.basename(originalname || "file");
+    const safe = raw.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").trim() || "file";
+    const ext = path.extname(safe);
+    const stem = path.basename(safe, ext) || "file";
+
+    let candidate = `${stem}${ext}`;
+    let n = 1;
+    while (fs.existsSync(path.join(dir, candidate))) {
+        candidate = `${stem} (${n})${ext}`;
+        n += 1;
+    }
+    return candidate;
 }
 
 function getDb() {
@@ -63,12 +81,40 @@ function resolveDiskPath(file) {
     return path.join(uploadsDir, file.storedFilename);
 }
 
+function getAllowedUploadRoots() {
+    const roots = new Set([
+        path.resolve(uploadsDir),
+        path.resolve(getUploadsDir()),
+        path.resolve(getDataDir(), "uploads"),
+    ]);
+    return [...roots];
+}
+
+function isPathUnderRoot(filePath, root) {
+    const resolved = path.resolve(filePath);
+    const resolvedRoot = path.resolve(root);
+    return (
+        resolved === resolvedRoot ||
+        resolved.startsWith(resolvedRoot + path.sep)
+    );
+}
+
 function isForeignDiskPath(storagePath) {
     if (!storagePath) {
         return false;
     }
 
-    return /^[A-Za-z]:\\/.test(storagePath) || storagePath.includes("\\");
+    const resolved = path.resolve(storagePath);
+    if (fs.existsSync(resolved)) {
+        return false;
+    }
+
+    if (getAllowedUploadRoots().some((root) => isPathUnderRoot(resolved, root))) {
+        return false;
+    }
+
+    // Absolute path from another machine/environment (e.g. uploaded on Render disk, opened locally)
+    return path.isAbsolute(storagePath);
 }
 
 async function saveToGridFS(storedFilename, buffer, contentType) {
@@ -97,19 +143,23 @@ async function saveToGridFS(storedFilename, buffer, contentType) {
 
 async function fileExists(file) {
     if (isGridfsRecord(file)) {
-        const bucket = getBucket();
-        const id = toObjectId(file.gridfsId);
+        try {
+            const bucket = getBucket();
+            const id = toObjectId(file.gridfsId);
 
-        if (id) {
-            const matches = await bucket.find({ _id: id }).limit(1).toArray();
+            if (id) {
+                const matches = await bucket.find({ _id: id }).limit(1).toArray();
+                return matches.length > 0;
+            }
+
+            const matches = await bucket
+                .find({ filename: file.storedFilename })
+                .limit(1)
+                .toArray();
             return matches.length > 0;
+        } catch {
+            return false;
         }
-
-        const matches = await bucket
-            .find({ filename: file.storedFilename })
-            .limit(1)
-            .toArray();
-        return matches.length > 0;
     }
 
     if (isForeignDiskPath(file.storagePath)) {
@@ -165,12 +215,34 @@ function streamFileToResponse(file, res, downloadName) {
     });
 }
 
+async function deleteStoredFile(file) {
+    if (isGridfsRecord(file) && file.gridfsId) {
+        try {
+            const bucket = getBucket();
+            await bucket.delete(toObjectId(file.gridfsId));
+        } catch (err) {
+            console.warn(`[HomeShare] GridFS delete: ${err.message}`);
+        }
+    }
+
+    const diskPath = file.storagePath || resolveDiskPath(file);
+    if (diskPath && fs.existsSync(diskPath)) {
+        try {
+            fs.unlinkSync(diskPath);
+        } catch (err) {
+            console.warn(`[HomeShare] Disk delete: ${err.message}`);
+        }
+    }
+}
+
 module.exports = {
     shouldUseGridFS,
     makeStoredFilename,
+    makeExplorerFilename,
     saveToGridFS,
     fileExists,
     streamFileToResponse,
+    deleteStoredFile,
     uploadsDir,
     isForeignDiskPath,
 };

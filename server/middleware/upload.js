@@ -2,15 +2,22 @@ const multer = require("multer");
 const {
     shouldUseGridFS,
     makeStoredFilename,
+    makeExplorerFilename,
     uploadsDir,
 } = require("../utils/fileStorage");
+const { ensureUploadsDir } = require("../utils/appPaths");
 
 const diskStorage = multer.diskStorage({
     destination: (_req, _file, cb) => {
-        cb(null, uploadsDir);
+        try {
+            cb(null, ensureUploadsDir());
+        } catch (err) {
+            cb(err);
+        }
     },
     filename: (_req, file, cb) => {
-        cb(null, makeStoredFilename(file.originalname));
+        // Local disk / Explorer folder: keep readable names
+        cb(null, makeExplorerFilename(file.originalname));
     },
 });
 
@@ -31,4 +38,10 @@ function runUpload(req, res, next) {
     });
 }
 
-module.exports = { runUpload, uploadsDir, MAX_FILE_SIZE, makeStoredFilename };
+module.exports = {
+    runUpload,
+    uploadsDir,
+    MAX_FILE_SIZE,
+    makeStoredFilename,
+    makeExplorerFilename,
+};

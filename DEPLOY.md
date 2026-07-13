@@ -81,7 +81,9 @@ Trusted-network detection compares each request’s IP to a subnet stored in Mon
 
 ### Local mode from GitHub Pages
 
-The site can **auto-detect** a server on `http://127.0.0.1:8080` when users run the downloadable starter (`client/public/downloads/`). Users click **Enable Local Network Mode** on the home page, download the `.bat` / `.sh` file, run it once, then **Detect local server**. Edit `YOUR_USERNAME` in the starter scripts before publishing.
+Users download **HomeShare-Local-Windows.zip** from the site (no Node/Git install). Unzip → run `Start HomeShare.bat` → set `MONGO_URI` on first launch → **Detect local server** on the website.
+
+Maintainers: `cd server && npm run build:local-package` (Windows). The Pages deploy workflow builds this ZIP automatically on each push to `main`.
 
 ## 6. Activation emails in production
 

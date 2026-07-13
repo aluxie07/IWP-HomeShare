@@ -1,6 +1,31 @@
 const verifyRecaptcha = require("../utils/verifyRecaptcha");
+const { isRenderHost } = require("../utils/emailConfig");
+
+/** reCAPTCHA only on Render (cloud). Always off for local Node / Local Network Mode. */
+function isRecaptchaRequired() {
+    const flag = (process.env.SKIP_RECAPTCHA || "").trim().toLowerCase();
+    if (flag === "true" || flag === "1" || flag === "yes") {
+        return false;
+    }
+
+    // Never require on a machine that is not Render
+    if (!isRenderHost()) {
+        return false;
+    }
+
+    if (flag === "false" || flag === "0" || flag === "no") {
+        return Boolean((process.env.RECAPTCHA_SECRET_KEY || "").trim());
+    }
+
+    return Boolean((process.env.RECAPTCHA_SECRET_KEY || "").trim());
+}
 
 async function verifyRecaptchaMiddleware(req, res, next) {
+    if (!isRecaptchaRequired()) {
+        next();
+        return;
+    }
+
     const token = req.body.recaptchaToken;
 
     if (!token) {
@@ -45,3 +70,4 @@ async function verifyRecaptchaMiddleware(req, res, next) {
 }
 
 module.exports = verifyRecaptchaMiddleware;
+module.exports.isRecaptchaRequired = isRecaptchaRequired;

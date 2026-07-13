@@ -4,7 +4,24 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:local-exe": "pkg . --targets node20-win-x64 --output ../dist/local/HomeShare-Local.exe",
+    "build:local-package": "powershell -ExecutionPolicy Bypass -File scripts/build-local-package.ps1"
+  },
+  "bin": "local-entry.js",
+  "pkg": {
+    "scripts": [
+      "local-entry.js",
+      "index.js",
+      "routes/**/*.js",
+      "middleware/**/*.js",
+      "models/**/*.js",
+      "utils/**/*.js"
+    ],
+    "assets": [
+      "node_modules/bcrypt/prebuilds/**/*"
+    ],
+    "outputPath": "../dist/local"
   },
   "keywords": [],
   "author": "",
@@ -12,6 +29,7 @@
   "type": "commonjs",
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "chokidar": "^5.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
@@ -20,5 +38,8 @@
     "mongoose": "^9.6.2",
     "multer": "^2.1.1",
     "nodemailer": "^8.0.8"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.20.0"
   }
 }

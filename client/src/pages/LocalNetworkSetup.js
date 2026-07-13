@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     getApiMode,
     getDiscoveredApiUrl,
@@ -9,6 +9,9 @@ import {
 } from "../utils/apiDiscovery";
 
 const PUBLIC = process.env.PUBLIC_URL || "";
+const LOCAL_ZIP_PATH = `${PUBLIC}/downloads/HomeShare-Local-Windows.zip`;
+const LOCAL_ZIP_URL =
+    process.env.REACT_APP_LOCAL_PACKAGE_URL || LOCAL_ZIP_PATH;
 
 function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
     const [apiMode, setApiMode] = useState(getApiMode());
@@ -18,6 +21,27 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
     const [status, setStatus] = useState("");
     const [isError, setIsError] = useState(false);
     const [checking, setChecking] = useState(false);
+    const [zipAvailable, setZipAvailable] = useState(null);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        fetch(LOCAL_ZIP_URL, { method: "HEAD" })
+            .then((res) => {
+                if (!cancelled) {
+                    setZipAvailable(res.ok);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setZipAvailable(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const refreshDiscovery = async () => {
         setChecking(true);
@@ -104,9 +128,10 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                 </div>
 
                 <p className="files-page-intro network-settings-intro">
-                    The GitHub website cannot run a server by itself. Download the starter,
-                    run it once on your PC, then this page will <strong>automatically</strong>{" "}
-                    connect to <code>http://127.0.0.1:8080</code> when you refresh.
+                    Download <strong>one package</strong> — no Node.js or Git install needed.
+                    Unzip, double-click <strong>Start HomeShare.bat</strong>, set your MongoDB
+                    URL on first launch, then this page will <strong>automatically</strong>{" "}
+                    connect to <code>http://127.0.0.1:8080</code>.
                 </p>
 
                 <div
@@ -130,28 +155,33 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                 </div>
 
                 <div className="local-setup-steps">
-                    <h3 className="files-section-title">Step 1 — Download starter</h3>
+                    <h3 className="files-section-title">Step 1 — Download (Windows)</h3>
                     <p className="files-muted">
-                        Requires{" "}
-                        <a href="https://nodejs.org" target="_blank" rel="noreferrer">
-                            Node.js
-                        </a>{" "}
-                        installed.
+                        Everything is included (Node + server). You only need a free MongoDB
+                        Atlas connection string.
                     </p>
                     <div className="local-setup-downloads">
                         <a
-                            className="logout-btn local-setup-download-btn"
-                            href={`${PUBLIC}/downloads/start-homeshare-local.bat`}
-                            download
+                            className={`logout-btn local-setup-download-btn local-setup-download-btn--primary ${
+                                zipAvailable === false ? "local-setup-download-btn--disabled" : ""
+                            }`}
+                            href={LOCAL_ZIP_URL}
+                            download="HomeShare-Local-Windows.zip"
+                            aria-disabled={zipAvailable === false}
+                            onClick={(e) => {
+                                if (zipAvailable === false) {
+                                    e.preventDefault();
+                                }
+                            }}
                         >
-                            Download for Windows (.bat)
+                            Download HomeShare Local (.zip)
                         </a>
                         <a
                             className="auth-form__secondary-btn local-setup-download-btn"
-                            href={`${PUBLIC}/downloads/start-homeshare-local.sh`}
-                            download
+                            href={`${PUBLIC}/downloads/HomeShare-Local.exe`}
+                            download="HomeShare-Local.exe"
                         >
-                            Download for Mac/Linux (.sh)
+                            Or single .exe (if available)
                         </a>
                         <a
                             className="files-link-btn"
@@ -161,11 +191,39 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                             Setup instructions (.txt)
                         </a>
                     </div>
+                    {zipAvailable === false && (
+                        <p className="error local-setup-missing-zip">
+                            <strong>Package not on this server yet.</strong> If you run the
+                            site locally, build it once:{" "}
+                            <code>cd server &amp;&amp; npm run build:local-package</code>
+                            , then restart <code>npm start</code>. On GitHub Pages, merge to{" "}
+                            <code>main</code> and wait for the deploy workflow. You can still use{" "}
+                            <a href={`${PUBLIC}/downloads/start-homeshare-local.bat`} download>
+                                start-homeshare-local.bat
+                            </a>{" "}
+                            if you have Node.js and Git installed.
+                        </p>
+                    )}
+                    {zipAvailable === null && (
+                        <p className="files-muted">Checking download availability…</p>
+                    )}
+                    <p className="files-muted local-setup-advanced">
+                        Advanced (requires Node.js + Git):{" "}
+                        <a href={`${PUBLIC}/downloads/start-homeshare-local.bat`} download>
+                            .bat
+                        </a>
+                        {" · "}
+                        <a href={`${PUBLIC}/downloads/start-homeshare-local.sh`} download>
+                            .sh
+                        </a>
+                    </p>
 
-                    <h3 className="files-section-title">Step 2 — Run the starter</h3>
+                    <h3 className="files-section-title">Step 2 — Unzip and run</h3>
                     <p className="files-muted">
-                        Double-click the file (or run in Terminal). Keep the window open.
-                        First run may take a minute to install dependencies.
+                        Unzip the download, then double-click{" "}
+                        <strong>Start HomeShare.bat</strong>. First run opens Notepad — paste
+                        your <code>MONGO_URI</code>, save, then run the .bat again. Keep the
+                        window open.
                     </p>
 
                     <h3 className="files-section-title">Step 3 — Detect local server</h3>

@@ -1,44 +1,35 @@
-HomeShare — Local Network Mode (from GitHub Pages)
-==================================================
+HomeShare Local for Windows
+==========================
 
-The website on GitHub Pages is only the frontend. Local Network Mode needs
-a small server running on your PC or on your Wi-Fi network.
+Download: HomeShare-Local-Windows.zip (from this website after deploy, or build locally — see below)
 
-QUICK START (same computer as the website)
+QUICK START
+-----------
+1. Download and unzip HomeShare-Local-Windows.zip
+2. Double-click Start HomeShare.bat
+3. First run: Notepad opens — set MONGO_URI (MongoDB Atlas), save, close
+4. Run Start HomeShare.bat again — keep the window open
+5. Open https://aluxie07.github.io/IWP-HomeShare (or your local client)
+6. Enable Local Network Mode → Detect local server
+
+BUILD THE ZIP (developers / local website)
 ------------------------------------------
-1. Install Node.js: https://nodejs.org
-2. Download and run:
-   - Windows: start-homeshare-local.bat
-   - Mac/Linux: start-homeshare-local.sh (chmod +x first)
-3. Edit ~/HomeShare-Local/server/.env when prompted:
-   - MONGO_URI = your MongoDB connection string
-   - CLIENT_URL = your GitHub Pages URL
-     e.g. https://YOUR_USERNAME.github.io/IWP-HomeShare
-   - ALLOWED_ORIGINS = same URL + http://localhost:3000
-4. Keep the server window open.
-5. Open your GitHub Pages site in the browser.
-6. Click "Enable local mode" → "Detect local server".
+From the repo root on Windows:
 
-The site will automatically switch from Render to your local server.
+  cd server
+  npm run build:local-package
 
-OTHER DEVICES ON THE SAME WI-FI (phone, tablet)
--------------------------------------------------
-1. Run the server on one PC (steps above).
-2. On that PC, find its LAN IP (e.g. 192.168.1.100).
-3. On each device, open the GitHub Pages site.
-4. Enable local mode → enter: http://192.168.1.100:8080
-5. Log in and use Local Only files as usual.
+This creates:
+  client/public/downloads/HomeShare-Local-Windows.zip
 
-ADMIN: REGISTER TRUSTED NETWORK
--------------------------------
-After local mode is connected, log in as admin → Network →
-"Register current network".
+Then restart the React dev server (npm start) and download will work.
 
-TROUBLESHOOTING
+GITHUB PAGES
+------------
+The zip is built automatically when you push to main (Deploy workflow).
+If the download link 404s, merge your branch and wait for the GitHub Action to finish.
+
+CONFIG LOCATION
 ---------------
-- "Cannot reach API" → server not running or wrong address
-- CORS error → fix ALLOWED_ORIGINS in server/.env to match your Pages URL
-- MongoDB error → set MONGO_URI in server/.env (Atlas or local MongoDB)
-
-Replace YOUR_USERNAME in the starter scripts with your real GitHub username
-before sharing the download links.
+%APPDATA%\HomeShare\local-server\.env
+%APPDATA%\HomeShare\local-server\uploads\
