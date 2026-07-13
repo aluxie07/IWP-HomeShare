@@ -20,7 +20,7 @@ function buildDefaultEnv() {
         "SKIP_RECAPTCHA=true",
         "PORT=8080",
         `CLIENT_URL=${DEFAULT_CLIENT_URL}`,
-        `ALLOWED_ORIGINS=${DEFAULT_CLIENT_URL},http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080`,
+        `ALLOWED_ORIGINS=${DEFAULT_CLIENT_URL},http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080`,
         "JWT_SECRET=change-this-to-a-long-random-string",
         "MONGO_URI=mongodb+srv://USER:PASSWORD@cluster.mongodb.net/homeshare",
         "",

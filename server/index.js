@@ -46,7 +46,11 @@ app.set("trust proxy", 1);
 function getAllowedOrigins() {
     const origins = new Set([
         "http://localhost:3000",
+        "http://127.0.0.1:3000",
         "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        // Live site must be able to probe this local API from the browser
+        "https://aluxie07.github.io",
     ]);
 
     if (process.env.CLIENT_URL) {
@@ -69,14 +73,55 @@ function getAllowedOrigins() {
     return [...origins];
 }
 
+function isLocalDiskMode() {
+    return (process.env.FILE_STORAGE || "").trim().toLowerCase() === "disk";
+}
+
+function isAllowedOrigin(origin) {
+    if (!origin) {
+        return true;
+    }
+    if (getAllowedOrigins().includes(origin)) {
+        return true;
+    }
+    // Local Network Mode: allow any GitHub Pages / localhost frontend
+    if (isLocalDiskMode()) {
+        try {
+            const { hostname, protocol } = new URL(origin);
+            if (hostname === "localhost" || hostname === "127.0.0.1") {
+                return true;
+            }
+            if (hostname.endsWith(".github.io") && protocol === "https:") {
+                return true;
+            }
+            // Same-LAN frontends during lab testing
+            if (/^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(hostname)) {
+                return true;
+            }
+        } catch {
+            return false;
+        }
+    }
+    return false;
+}
+
+// Chrome Private Network Access: HTTPS public site → http://127.0.0.1
+app.use((req, res, next) => {
+    if (req.headers["access-control-request-private-network"] === "true") {
+        res.setHeader("Access-Control-Allow-Private-Network", "true");
+    }
+    next();
+});
+
 app.use(
     cors({
         origin(origin, callback) {
-            if (!origin || getAllowedOrigins().includes(origin)) {
+            if (isAllowedOrigin(origin)) {
                 callback(null, true);
                 return;
             }
-            callback(new Error("Not allowed by CORS"));
+            // Reject without throwing (throwing becomes a 500 and breaks Detect)
+            callback(null, false);
         },
     })
 );

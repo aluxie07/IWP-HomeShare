@@ -227,6 +227,11 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                     </p>
 
                     <h3 className="files-section-title">Step 3 — Detect local server</h3>
+                    <p className="files-muted">
+                        Detection only works while this PC’s local server is running. The live
+                        site talks to <code>http://127.0.0.1:8080</code> — if Detect fails,
+                        restart the local server (needs the latest build) and try again.
+                    </p>
                     <button
                         type="button"
                         className="logout-btn"
