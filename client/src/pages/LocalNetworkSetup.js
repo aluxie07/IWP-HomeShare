@@ -221,9 +221,10 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                     <h3 className="files-section-title">Step 2 — Unzip and run</h3>
                     <p className="files-muted">
                         Unzip the download, then double-click{" "}
-                        <strong>Start HomeShare.bat</strong>. First run opens Notepad — paste
-                        your <code>MONGO_URI</code>, save, then run the .bat again. Keep the
-                        window open.
+                        <strong>Start HomeShare.bat</strong> (or{" "}
+                        <strong>HomeShare-Local.exe</strong> when available). On first run a
+                        setup window asks for your <code>MONGO_URI</code> and optional admin
+                        email — then the server starts. Keep the window open.
                     </p>
 
                     <h3 className="files-section-title">Step 3 — Detect local server</h3>

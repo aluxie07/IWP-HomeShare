@@ -87,8 +87,9 @@ HomeShare Local for Windows
 
 1. Unzip this folder anywhere (e.g. Desktop\HomeShare-Local)
 2. Double-click "Start HomeShare.bat"
-3. First run opens Notepad — set your MONGO_URI (MongoDB Atlas), save, close
-4. Double-click "Start HomeShare.bat" again
+3. First run shows a setup window — paste your MongoDB Atlas URI
+   (optional: admin email), then click Save and start
+4. Keep the window open
 5. Open https://aluxie07.github.io/IWP-HomeShare
 6. Enable Local Network Mode → Detect local server
 
