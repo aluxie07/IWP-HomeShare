@@ -22,7 +22,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: server/package-lock.json
 
@@ -36,17 +36,15 @@ jobs:
 
       - name: Build HomeShare Local EXE
         working-directory: server
-        continue-on-error: true
         shell: pwsh
         run: |
           npm run build:local-exe
-          if (Test-Path ../dist/local/HomeShare-Local.exe) {
-            New-Item -ItemType Directory -Force -Path ../client/public/downloads | Out-Null
-            Copy-Item ../dist/local/HomeShare-Local.exe ../client/public/downloads/HomeShare-Local.exe -Force
-            Write-Host "EXE copied to client/public/downloads"
-          } else {
-            Write-Host "EXE was not produced"
+          if (-not (Test-Path ../dist/local/HomeShare-Local.exe)) {
+            throw "HomeShare-Local.exe was not produced"
           }
+          New-Item -ItemType Directory -Force -Path ../client/public/downloads | Out-Null
+          Copy-Item ../dist/local/HomeShare-Local.exe ../client/public/downloads/HomeShare-Local.exe -Force
+          Get-Item ../client/public/downloads/HomeShare-Local.exe | Format-List Name, Length
 
       - uses: actions/upload-artifact@v4
         with:

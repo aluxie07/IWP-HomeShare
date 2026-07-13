@@ -16,25 +16,28 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
 
       - name: Build portable ZIP (Node + server bundled)
         working-directory: server
         run: npm run build:local-package
 
-      - name: Try single EXE (optional)
+      - name: Build single EXE
         working-directory: server
-        continue-on-error: true
-        run: npm run build:local-exe
-
-      - name: Copy EXE to downloads if built
         shell: pwsh
         run: |
-          if (Test-Path dist/local/HomeShare-Local.exe) {
-            Copy-Item dist/local/HomeShare-Local.exe client/public/downloads/HomeShare-Local.exe
+          npm run build:local-exe
+          if (-not (Test-Path ../dist/local/HomeShare-Local.exe)) {
+            throw "HomeShare-Local.exe was not produced"
           }
+          New-Item -ItemType Directory -Force -Path ../client/public/downloads | Out-Null
+          Copy-Item ../dist/local/HomeShare-Local.exe ../client/public/downloads/HomeShare-Local.exe -Force
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
