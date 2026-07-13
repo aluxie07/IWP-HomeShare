@@ -711,6 +711,23 @@
   align-self: flex-start;
 }
 
+.file-upload-progress {
+  margin-top: 0.75rem;
+  height: 8px;
+  width: 100%;
+  max-width: 420px;
+  background: #e6ebf0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.file-upload-progress__bar {
+  height: 100%;
+  background: #0b6bcb;
+  border-radius: 999px;
+  transition: width 0.15s ease;
+}
+
 .files-section {
   border-top: 1px solid #e8e8e8;
   padding-top: 1.5rem;

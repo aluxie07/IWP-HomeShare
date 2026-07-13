@@ -7,6 +7,8 @@ const {
 } = require("../utils/fileStorage");
 const { ensureUploadsDir } = require("../utils/appPaths");
 
+const FIVE_GB = 5 * 1024 * 1024 * 1024;
+
 const diskStorage = multer.diskStorage({
     destination: (_req, _file, cb) => {
         try {
@@ -20,7 +22,7 @@ const diskStorage = multer.diskStorage({
     },
 });
 
-/** Disk: unlimited. Cloud shards/GridFS: 50MB default (or MAX_UPLOAD_BYTES). */
+/** Disk: unlimited. Cloud: 5GB default (or MAX_UPLOAD_BYTES). */
 function getMaxFileSize() {
     if (process.env.MAX_UPLOAD_BYTES) {
         const n = Number(process.env.MAX_UPLOAD_BYTES);
@@ -30,7 +32,7 @@ function getMaxFileSize() {
     if (mode === "disk") {
         return null;
     }
-    return 50 * 1024 * 1024;
+    return FIVE_GB;
 }
 
 const MAX_FILE_SIZE = getMaxFileSize();
@@ -59,4 +61,5 @@ module.exports = {
     getMaxFileSize,
     makeStoredFilename,
     makeExplorerFilename,
+    FIVE_GB,
 };

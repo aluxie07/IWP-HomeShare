@@ -9,6 +9,7 @@ const {
     areCloudShardsConfigured,
     saveToCloudShards,
     loadFromCloudShards,
+    streamCloudShardsToResponse,
     cloudShardsExist,
     deleteCloudShards,
 } = require("./cloudShards");
@@ -97,7 +98,11 @@ function isGridfsRecord(file) {
 }
 
 function isShardsRecord(file) {
-    return file.storageKind === "shards" || (file.shards && file.shards.length > 0);
+    return (
+        file.storageKind === "shards" ||
+        (file.shards && file.shards.length > 0) ||
+        (file.chunks && file.chunks.length > 0)
+    );
 }
 
 function resolveDiskPath(file) {
@@ -209,16 +214,7 @@ function streamFileToResponse(file, res, downloadName) {
     return new Promise(async (resolve, reject) => {
         try {
             if (isShardsRecord(file)) {
-                const buffer = await loadFromCloudShards(file);
-                res.setHeader(
-                    "Content-Disposition",
-                    `attachment; filename="${downloadName.replace(/"/g, "")}"`
-                );
-                if (file.fileType) {
-                    res.setHeader("Content-Type", file.fileType);
-                }
-                res.setHeader("Content-Length", buffer.length);
-                res.end(buffer);
+                await streamCloudShardsToResponse(file, res, downloadName);
                 resolve();
                 return;
             }

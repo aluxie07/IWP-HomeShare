@@ -13,13 +13,25 @@ const {
     isForeignDiskPath,
     shouldUseDisk,
     deleteStoredFile,
+    getStorageMode,
+    makeExplorerFilename,
 } = require("../utils/fileStorage");
+const { saveChunkToCloudShards } = require("../utils/cloudShards");
+const {
+    DEFAULT_CHUNK_SIZE,
+    createUploadSession,
+    getUploadSession,
+    completeUploadSession,
+    abortUploadSession,
+    cleanupSessionFiles,
+} = require("../utils/uploadSessions");
 const {
     syncUploadToExplorer,
     removeExplorerFile,
     markInternalWrite,
 } = require("../utils/explorerSync");
 const { reconcileExplorerFolder } = require("../utils/explorerReconcile");
+const { ensureUploadsDir } = require("../utils/appPaths");
 const path = require("path");
 const {
     generateShareToken,
@@ -34,6 +46,7 @@ const {
 } = require("../utils/fileAccess");
 
 const router = express.Router();
+const CHUNK_BODY_LIMIT = DEFAULT_CHUNK_SIZE + 1024 * 1024;
 
 function formatFile(file) {
     const payload = {
@@ -91,6 +104,7 @@ router.post(
             let gridfsId;
             let shards;
             let shardMeta;
+            let chunks;
             const fileId = new mongoose.Types.ObjectId();
 
             // Prevent folder watcher from importing this upload as a duplicate
@@ -106,6 +120,7 @@ router.post(
                 storageKind = shardResult.storageKind;
                 shards = shardResult.shards;
                 shardMeta = shardResult.shardMeta;
+                chunks = shardResult.chunks;
                 storagePath = undefined;
             } else if (req.fileStorageMode === "gridfs") {
                 const gridMeta = await saveToGridFS(
@@ -155,6 +170,7 @@ router.post(
                 storagePath,
                 shards,
                 shardMeta,
+                chunks,
                 accessMode,
             });
 
@@ -177,6 +193,211 @@ router.post(
         }
     }
 );
+
+// --- Chunked upload (required for large cloud files up to 5GB) ---
+
+router.post("/files/upload/init", authMiddleware, requireMongo, async (req, res) => {
+    try {
+        const filename = String(req.body?.filename || "").trim();
+        const fileSize = Number(req.body?.fileSize);
+        const fileType = String(req.body?.fileType || "application/octet-stream");
+        const accessMode = normalizeAccessMode(req.body?.accessMode);
+        const maxBytes = getMaxFileSize();
+
+        if (!filename || !Number.isFinite(fileSize) || fileSize <= 0) {
+            return res.status(400).json({ message: "filename and fileSize are required" });
+        }
+        if (maxBytes && fileSize > maxBytes) {
+            return res.status(400).json({
+                message: `File is too large. Maximum size is ${Math.round(maxBytes / (1024 * 1024))} MB.`,
+            });
+        }
+
+        const storageMode = getStorageMode();
+        const fileId = new mongoose.Types.ObjectId();
+        const session = createUploadSession({
+            userId: req.user.id,
+            fileId,
+            filename,
+            fileSize,
+            fileType,
+            accessMode,
+            storageMode,
+            chunkSize: DEFAULT_CHUNK_SIZE,
+        });
+
+        res.status(200).json({
+            uploadId: session.uploadId,
+            fileId: session.fileId,
+            chunkSize: session.chunkSize,
+            chunkCount: session.chunkCount,
+            storageMode: session.storageMode,
+        });
+    } catch (err) {
+        console.error("[HomeShare] Upload init failed:", err.message);
+        res.status(500).json({ message: "Could not start upload" });
+    }
+});
+
+router.put(
+    "/files/upload/:uploadId/chunks/:index",
+    authMiddleware,
+    requireMongo,
+    express.raw({ type: "*/*", limit: CHUNK_BODY_LIMIT }),
+    async (req, res) => {
+        try {
+            const session = getUploadSession(req.params.uploadId, req.user.id);
+            if (!session) {
+                return res.status(404).json({ message: "Upload session not found or expired" });
+            }
+
+            const index = Number(req.params.index);
+            if (!Number.isInteger(index) || index < 0 || index >= session.chunkCount) {
+                return res.status(400).json({ message: "Invalid chunk index" });
+            }
+
+            const buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || []);
+            if (!buffer.length) {
+                return res.status(400).json({ message: "Empty chunk" });
+            }
+
+            const expected =
+                index === session.chunkCount - 1
+                    ? session.fileSize - session.chunkSize * (session.chunkCount - 1)
+                    : session.chunkSize;
+            if (buffer.length !== expected && buffer.length > session.chunkSize) {
+                return res.status(400).json({
+                    message: `Unexpected chunk size (got ${buffer.length}, expected about ${expected})`,
+                });
+            }
+
+            if (session.storageMode === "shards") {
+                const chunkRecord = await saveChunkToCloudShards(
+                    session.fileId,
+                    index,
+                    buffer
+                );
+                session.chunkRecords.set(index, chunkRecord);
+            } else if (session.storageMode === "disk") {
+                const chunkPath = path.join(session.tempDir, `chunk-${index}.bin`);
+                fs.writeFileSync(chunkPath, buffer);
+                session.chunkRecords.set(index, { index, size: buffer.length, path: chunkPath });
+            } else {
+                // gridfs fallback: stash chunks on disk then assemble
+                const chunkPath = path.join(session.tempDir, `chunk-${index}.bin`);
+                fs.writeFileSync(chunkPath, buffer);
+                session.chunkRecords.set(index, { index, size: buffer.length, path: chunkPath });
+            }
+
+            session.received.add(index);
+            res.status(200).json({
+                message: "Chunk received",
+                index,
+                received: session.received.size,
+                chunkCount: session.chunkCount,
+            });
+        } catch (err) {
+            console.error("[HomeShare] Chunk upload failed:", err.message);
+            res.status(500).json({ message: err.message || "Chunk upload failed" });
+        }
+    }
+);
+
+router.post("/files/upload/:uploadId/complete", authMiddleware, requireMongo, async (req, res) => {
+    try {
+        const session = getUploadSession(req.params.uploadId, req.user.id);
+        if (!session) {
+            return res.status(404).json({ message: "Upload session not found or expired" });
+        }
+
+        if (session.received.size !== session.chunkCount) {
+            return res.status(400).json({
+                message: `Upload incomplete (${session.received.size}/${session.chunkCount} chunks)`,
+            });
+        }
+
+        let storageKind = session.storageMode;
+        let storagePath;
+        let gridfsId;
+        let shards;
+        let shardMeta;
+        let chunks;
+        const storedFilename = makeStoredFilename(session.filename);
+
+        if (session.storageMode === "shards") {
+            chunks = [...session.chunkRecords.values()].sort((a, b) => a.index - b.index);
+            shards = chunks[0]?.shards;
+            shardMeta = chunks[0]?.shardMeta;
+            storageKind = "shards";
+        } else if (session.storageMode === "disk" || shouldUseDisk()) {
+            ensureUploadsDir();
+            const destName = makeExplorerFilename(session.filename);
+            const destPath = path.join(ensureUploadsDir(), destName);
+            markInternalWrite(destPath);
+            const out = fs.createWriteStream(destPath);
+            for (let i = 0; i < session.chunkCount; i += 1) {
+                const rec = session.chunkRecords.get(i);
+                const data = fs.readFileSync(rec.path);
+                out.write(data);
+            }
+            await new Promise((resolve, reject) => {
+                out.end(() => resolve());
+                out.on("error", reject);
+            });
+            storageKind = "disk";
+            storagePath = destPath;
+        } else {
+            // Assemble for GridFS
+            const parts = [];
+            for (let i = 0; i < session.chunkCount; i += 1) {
+                const rec = session.chunkRecords.get(i);
+                parts.push(fs.readFileSync(rec.path));
+            }
+            const buffer = Buffer.concat(parts);
+            const gridMeta = await saveToGridFS(storedFilename, buffer, session.fileType);
+            storageKind = gridMeta.storageKind;
+            gridfsId = gridMeta.gridfsId;
+        }
+
+        const record = await File.create({
+            _id: new mongoose.Types.ObjectId(session.fileId),
+            filename: session.filename,
+            storedFilename: storagePath ? path.basename(storagePath) : storedFilename,
+            owner: req.user.id,
+            fileSize: session.fileSize,
+            fileType: session.fileType,
+            storageKind,
+            gridfsId,
+            storagePath,
+            shards,
+            shardMeta,
+            chunks,
+            accessMode: session.accessMode,
+        });
+
+        cleanupSessionFiles(session);
+        completeUploadSession(session.uploadId);
+
+        if (!(await fileExists(record))) {
+            return res.status(500).json({
+                message: "File was saved but could not be verified. Try uploading again.",
+            });
+        }
+
+        res.status(201).json({
+            message: "File uploaded successfully",
+            file: formatFile(record),
+        });
+    } catch (err) {
+        console.error("[HomeShare] Upload complete failed:", err.message);
+        res.status(500).json({ message: err.message || "Could not finalize upload" });
+    }
+});
+
+router.delete("/files/upload/:uploadId", authMiddleware, (req, res) => {
+    abortUploadSession(req.params.uploadId);
+    res.status(200).json({ message: "Upload cancelled" });
+});
 
 router.get("/files", authMiddleware, async (req, res) => {
     try {

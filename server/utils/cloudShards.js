@@ -124,8 +124,8 @@ async function streamToBuffer(body) {
     return Buffer.concat(chunks);
 }
 
-function shardObjectKey(fileId, shardIndex) {
-    return `shards/${fileId}/s${shardIndex}.bin`;
+function shardObjectKey(fileId, shardIndex, chunkIndex = 0) {
+    return `shards/${fileId}/c${chunkIndex}/s${shardIndex}.bin`;
 }
 
 async function uploadShard(providerName, bucket, key, body) {
@@ -182,18 +182,14 @@ async function shardExists(providerName, bucket, key) {
     }
 }
 
-/**
- * Encode buffer into 5 shards and upload across R2 / B2 / E2.
- * @returns metadata for the File document
- */
-async function saveToCloudShards(fileId, buffer) {
+async function saveChunkToCloudShards(fileId, chunkIndex, buffer) {
     if (!areCloudShardsConfigured()) {
         throw new Error(
             "Cloud shard providers are not configured. Set R2_*, B2_*, and E2_* env vars."
         );
     }
     if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
-        throw new Error("Upload buffer is empty");
+        throw new Error("Upload chunk is empty");
     }
 
     const encoded = encode(buffer);
@@ -201,7 +197,7 @@ async function saveToCloudShards(fileId, buffer) {
 
     for (const plan of PROVIDER_PLAN) {
         const provider = getProvider(plan.provider);
-        const key = shardObjectKey(fileId, plan.shardIndex);
+        const key = shardObjectKey(fileId, plan.shardIndex, chunkIndex);
         await uploadShard(
             plan.provider,
             provider.bucket,
@@ -217,7 +213,8 @@ async function saveToCloudShards(fileId, buffer) {
     }
 
     return {
-        storageKind: "shards",
+        index: chunkIndex,
+        size: buffer.length,
         shards: shardRecords,
         shardMeta: {
             dataShards: encoded.dataShards,
@@ -228,19 +225,30 @@ async function saveToCloudShards(fileId, buffer) {
     };
 }
 
-async function loadFromCloudShards(file) {
-    const meta = file.shardMeta || {};
+/** Legacy whole-file upload (small files / older clients). */
+async function saveToCloudShards(fileId, buffer) {
+    const chunk = await saveChunkToCloudShards(fileId, 0, buffer);
+    return {
+        storageKind: "shards",
+        shards: chunk.shards,
+        shardMeta: chunk.shardMeta,
+        chunks: [chunk],
+    };
+}
+
+async function loadChunkFromCloudShards(chunk) {
+    const meta = chunk.shardMeta || {};
     const shardSize = meta.shardSize;
-    const originalSize = meta.originalSize ?? file.fileSize;
-    if (!shardSize || !file.shards?.length) {
-        throw new Error("File shard metadata is missing");
+    const originalSize = meta.originalSize ?? chunk.size;
+    if (!shardSize || !chunk.shards?.length) {
+        throw new Error("Chunk shard metadata is missing");
     }
 
     const slots = new Array(TOTAL_SHARDS).fill(null);
     const errors = [];
 
     await Promise.all(
-        file.shards.map(async (s) => {
+        chunk.shards.map(async (s) => {
             try {
                 slots[s.index] = await downloadShard(s.provider, s.bucket, s.key);
             } catch (err) {
@@ -257,34 +265,107 @@ async function loadFromCloudShards(file) {
     }
 }
 
+async function loadFromCloudShards(file) {
+    if (file.chunks?.length) {
+        const parts = [];
+        for (const chunk of [...file.chunks].sort((a, b) => a.index - b.index)) {
+            parts.push(await loadChunkFromCloudShards(chunk));
+        }
+        return Buffer.concat(parts);
+    }
+
+    // Legacy single-shard-set records
+    const meta = file.shardMeta || {};
+    const shardSize = meta.shardSize;
+    const originalSize = meta.originalSize ?? file.fileSize;
+    if (!shardSize || !file.shards?.length) {
+        throw new Error("File shard metadata is missing");
+    }
+
+    return loadChunkFromCloudShards({
+        shards: file.shards,
+        shardMeta: meta,
+        size: originalSize,
+    });
+}
+
+async function streamCloudShardsToResponse(file, res, downloadName) {
+    res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${String(downloadName || "file").replace(/"/g, "")}"`
+    );
+    if (file.fileType) {
+        res.setHeader("Content-Type", file.fileType);
+    }
+    if (file.fileSize) {
+        res.setHeader("Content-Length", String(file.fileSize));
+    }
+
+    if (file.chunks?.length) {
+        const ordered = [...file.chunks].sort((a, b) => a.index - b.index);
+        for (const chunk of ordered) {
+            const buf = await loadChunkFromCloudShards(chunk);
+            if (!res.write(buf)) {
+                await new Promise((resolve) => res.once("drain", resolve));
+            }
+        }
+        res.end();
+        return;
+    }
+
+    const buffer = await loadFromCloudShards(file);
+    res.end(buffer);
+}
+
 async function cloudShardsExist(file) {
-    if (!file.shards?.length) {
+    const sets = file.chunks?.length
+        ? file.chunks
+        : file.shards?.length
+          ? [{ shards: file.shards }]
+          : [];
+
+    if (!sets.length) {
         return false;
     }
-    let ok = 0;
-    await Promise.all(
-        file.shards.map(async (s) => {
-            if (await shardExists(s.provider, s.bucket, s.key)) {
-                ok += 1;
-            }
-        })
-    );
-    return ok >= 3;
+
+    for (const set of sets) {
+        let ok = 0;
+        await Promise.all(
+            (set.shards || []).map(async (s) => {
+                if (await shardExists(s.provider, s.bucket, s.key)) {
+                    ok += 1;
+                }
+            })
+        );
+        if (ok < 3) {
+            return false;
+        }
+    }
+    return true;
 }
 
 async function deleteCloudShards(file) {
-    if (!file.shards?.length) {
-        return;
+    const all = [];
+    if (file.chunks?.length) {
+        for (const chunk of file.chunks) {
+            for (const s of chunk.shards || []) {
+                all.push(deleteShard(s.provider, s.bucket, s.key));
+            }
+        }
+    } else if (file.shards?.length) {
+        for (const s of file.shards) {
+            all.push(deleteShard(s.provider, s.bucket, s.key));
+        }
     }
-    await Promise.all(
-        file.shards.map((s) => deleteShard(s.provider, s.bucket, s.key))
-    );
+    await Promise.all(all);
 }
 
 module.exports = {
     areCloudShardsConfigured,
     saveToCloudShards,
+    saveChunkToCloudShards,
     loadFromCloudShards,
+    streamCloudShardsToResponse,
     cloudShardsExist,
     deleteCloudShards,
     PROVIDER_PLAN,

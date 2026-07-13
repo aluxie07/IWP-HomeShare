@@ -3,11 +3,99 @@ import NetworkStatusIndicator from "../components/NetworkStatusIndicator";
 import { getApiUrl, authHeaders, formatFileSize, formatUploadDate } from "../utils/api";
 import { ACCESS_MODES, getAccessModeLabel } from "../utils/accessModes";
 
+const FIVE_GB = 5 * 1024 * 1024 * 1024;
+
+async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLogin }) {
+    const initRes = await fetch(`${getApiUrl()}/files/upload/init`, {
+        method: "POST",
+        headers: {
+            ...authHeaders(),
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            filename: file.name,
+            fileSize: file.size,
+            fileType: file.type || "application/octet-stream",
+            accessMode,
+        }),
+    });
+
+    if (initRes.status === 401) {
+        onRedirectToLogin();
+        throw new Error("UNAUTHORIZED");
+    }
+
+    const initData = await initRes.json();
+    if (!initRes.ok) {
+        throw new Error(initData.message || "Could not start upload");
+    }
+
+    const { uploadId, chunkSize, chunkCount } = initData;
+
+    try {
+        for (let index = 0; index < chunkCount; index += 1) {
+            const start = index * chunkSize;
+            const end = Math.min(start + chunkSize, file.size);
+            const blob = file.slice(start, end);
+
+            const chunkRes = await fetch(
+                `${getApiUrl()}/files/upload/${uploadId}/chunks/${index}`,
+                {
+                    method: "PUT",
+                    headers: {
+                        ...authHeaders(),
+                        "Content-Type": "application/octet-stream",
+                    },
+                    body: blob,
+                }
+            );
+
+            if (chunkRes.status === 401) {
+                onRedirectToLogin();
+                throw new Error("UNAUTHORIZED");
+            }
+
+            const chunkData = await chunkRes.json().catch(() => ({}));
+            if (!chunkRes.ok) {
+                throw new Error(chunkData.message || `Chunk ${index + 1} failed`);
+            }
+
+            onProgress?.(Math.round(((index + 1) / chunkCount) * 100));
+        }
+
+        const doneRes = await fetch(`${getApiUrl()}/files/upload/${uploadId}/complete`, {
+            method: "POST",
+            headers: authHeaders(),
+        });
+
+        if (doneRes.status === 401) {
+            onRedirectToLogin();
+            throw new Error("UNAUTHORIZED");
+        }
+
+        const doneData = await doneRes.json();
+        if (!doneRes.ok) {
+            throw new Error(doneData.message || "Could not finalize upload");
+        }
+
+        return doneData;
+    } catch (err) {
+        if (err.message !== "UNAUTHORIZED") {
+            fetch(`${getApiUrl()}/files/upload/${uploadId}`, {
+                method: "DELETE",
+                headers: authHeaders(),
+            }).catch(() => {});
+        }
+        throw err;
+    }
+}
+
 function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
     const [selectedFile, setSelectedFile] = useState(null);
     const [status, setStatus] = useState("");
     const [isError, setIsError] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [progress, setProgress] = useState(0);
     const [files, setFiles] = useState([]);
     const [loadingList, setLoadingList] = useState(true);
     const [accessMode, setAccessMode] = useState("private");
@@ -44,12 +132,14 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
         setSelectedFile(file);
         setStatus("");
         setIsError(false);
+        setProgress(0);
     };
 
     const handleUpload = async (e) => {
         e.preventDefault();
         setStatus("");
         setIsError(false);
+        setProgress(0);
 
         if (!selectedFile) {
             setStatus("Please choose a file first.");
@@ -57,40 +147,34 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
             return;
         }
 
-        const formData = new FormData();
-        formData.append("file", selectedFile);
-        formData.append("accessMode", accessMode);
+        if (selectedFile.size > FIVE_GB) {
+            setStatus("File is too large. Maximum size is 5 GB.");
+            setIsError(true);
+            return;
+        }
 
         setUploading(true);
 
         try {
-            const res = await fetch(`${getApiUrl()}/files/upload`, {
-                method: "POST",
-                headers: authHeaders(),
-                body: formData,
+            const data = await uploadFileInChunks({
+                file: selectedFile,
+                accessMode,
+                onProgress: setProgress,
+                onRedirectToLogin,
             });
-
-            const data = await res.json();
-
-            if (res.status === 401) {
-                onRedirectToLogin();
-                return;
-            }
-
-            if (!res.ok) {
-                setStatus(data.message || "Upload failed");
-                setIsError(true);
-                return;
-            }
 
             setStatus(data.message || "File uploaded successfully");
             setIsError(false);
             setSelectedFile(null);
+            setProgress(100);
             const input = document.getElementById("file-upload-input");
             if (input) input.value = "";
             loadFiles();
-        } catch {
-            setStatus("Could not reach server. Is the backend running?");
+        } catch (err) {
+            if (err.message === "UNAUTHORIZED") {
+                return;
+            }
+            setStatus(err.message || "Could not reach server. Is the backend running?");
             setIsError(true);
         } finally {
             setUploading(false);
@@ -102,8 +186,8 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
             <div className="dashboard-card files-page-card">
                 <h2 className="auth-title">Upload file</h2>
                 <p className="files-page-intro">
-                    Choose a file from your computer and upload it to your HomeShare
-                    library. Set an access mode to control who can reach the file.
+                    Choose a file from your computer (up to 5 GB). Large files are sent in
+                    chunks so uploads stay reliable.
                 </p>
 
                 <NetworkStatusIndicator compact />
@@ -146,8 +230,16 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
                         className="logout-btn file-upload-submit"
                         disabled={uploading || !selectedFile}
                     >
-                        {uploading ? "Uploading…" : "Upload"}
+                        {uploading ? `Uploading… ${progress}%` : "Upload"}
                     </button>
+                    {uploading && (
+                        <div className="file-upload-progress" aria-valuenow={progress}>
+                            <div
+                                className="file-upload-progress__bar"
+                                style={{ width: `${progress}%` }}
+                            />
+                        </div>
+                    )}
                     <div className="message-area">
                         {status && (
                             <p className={isError ? "error" : "success"}>{status}</p>

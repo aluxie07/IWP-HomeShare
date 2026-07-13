@@ -10,6 +10,21 @@ const shardSchema = new mongoose.Schema(
     { _id: false }
 );
 
+const chunkSchema = new mongoose.Schema(
+    {
+        index: { type: Number, required: true },
+        size: { type: Number, required: true },
+        shards: [shardSchema],
+        shardMeta: {
+            dataShards: Number,
+            parityShards: Number,
+            shardSize: Number,
+            originalSize: Number,
+        },
+    },
+    { _id: false }
+);
+
 const fileSchema = new mongoose.Schema({
     filename: { type: String, required: true },
     storedFilename: { type: String, required: true },
@@ -27,6 +42,7 @@ const fileSchema = new mongoose.Schema({
         shardSize: Number,
         originalSize: Number,
     },
+    chunks: [chunkSchema],
     shareToken: { type: String, unique: true, sparse: true },
     shareExpiresAt: { type: Date },
     shareMaxDownloads: { type: Number },
