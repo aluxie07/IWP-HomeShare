@@ -12,9 +12,12 @@ import { ACCESS_MODES, canShareFile, getAccessModeLabel } from "../utils/accessM
 function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
     const [files, setFiles] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState("");
     const [shareFile, setShareFile] = useState(null);
     const [updatingModeId, setUpdatingModeId] = useState(null);
+    const [deletingId, setDeletingId] = useState(null);
+    const [syncNote, setSyncNote] = useState("");
 
     const loadFiles = useCallback(async () => {
         setLoading(true);
@@ -48,6 +51,94 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
     useEffect(() => {
         loadFiles();
     }, [loadFiles]);
+
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        setError("");
+        setSyncNote("");
+
+        try {
+            const syncRes = await fetch(`${getApiUrl()}/files/sync-folder`, {
+                method: "POST",
+                headers: authHeaders(),
+            });
+
+            if (syncRes.status === 401) {
+                onRedirectToLogin();
+                return;
+            }
+
+            const syncData = await syncRes.json().catch(() => ({}));
+
+            if (syncRes.ok && Array.isArray(syncData.files)) {
+                setFiles(syncData.files);
+                if (syncData.skipped) {
+                    setSyncNote(
+                        "Connected to the cloud API — drop-folder sync needs Detect local server first."
+                    );
+                } else if (syncData.message) {
+                    setSyncNote(syncData.message);
+                }
+                return;
+            }
+
+            // Fallback: list only (e.g. cloud API without sync route)
+            const res = await fetch(`${getApiUrl()}/files`, {
+                headers: authHeaders(),
+            });
+
+            if (res.status === 401) {
+                onRedirectToLogin();
+                return;
+            }
+
+            const data = await res.json();
+            if (!res.ok) {
+                setError(data.message || syncData.message || "Could not refresh files");
+                return;
+            }
+
+            setFiles(data.files || []);
+            setSyncNote("Library refreshed");
+        } catch {
+            setError("Could not refresh. Is the local server running?");
+        } finally {
+            setRefreshing(false);
+        }
+    };
+
+    const handleDelete = async (fileId, filename) => {
+        if (!window.confirm(`Delete "${filename}"? This also removes it from the HomeShare folder.`)) {
+            return;
+        }
+
+        setDeletingId(fileId);
+        setError("");
+
+        try {
+            const res = await fetch(`${getApiUrl()}/files/${fileId}`, {
+                method: "DELETE",
+                headers: authHeaders(),
+            });
+
+            if (res.status === 401) {
+                onRedirectToLogin();
+                return;
+            }
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                setError(data.message || "Could not delete file");
+                return;
+            }
+
+            loadFiles();
+        } catch {
+            setError("Could not delete file");
+        } finally {
+            setDeletingId(null);
+        }
+    };
 
     const handleAccessModeChange = async (fileId, nextMode) => {
         setUpdatingModeId(fileId);
@@ -114,19 +205,31 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
             <div className="dashboard-card files-page-card">
                 <div className="files-section-header">
                     <h2 className="auth-title">File library</h2>
-                    <button type="button" className="logout-btn files-upload-nav-btn" onClick={onGoToUpload}>
-                        Upload file
-                    </button>
+                    <div className="files-section-header-actions">
+                        <button
+                            type="button"
+                            className="file-download-btn"
+                            onClick={handleRefresh}
+                            disabled={refreshing || loading}
+                        >
+                            {refreshing ? "Refreshing…" : "Refresh"}
+                        </button>
+                        <button type="button" className="logout-btn files-upload-nav-btn" onClick={onGoToUpload}>
+                            Upload file
+                        </button>
+                    </div>
                 </div>
                 <p className="files-page-intro">
-                    Assign Private, Shared, or Local Only access modes. Local Only files
-                    require a trusted network connection to download.
+                    Assign Private, Shared, or Local Only access modes. In Local Network Mode,
+                    files also sync with your PC folder{" "}
+                    <code>HomeShare\Files</code>. Drop files there, then click Refresh.
                 </p>
 
                 <NetworkStatusIndicator compact />
 
                 {loading && <p className="files-muted">Loading your files…</p>}
                 {error && <p className="error">{error}</p>}
+                {!error && syncNote && <p className="files-muted">{syncNote}</p>}
 
                 {!loading && !error && files.length === 0 && (
                     <p className="files-muted">
@@ -196,6 +299,14 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                         onClick={() => handleDownload(file.id, file.filename)}
                                     >
                                         Download
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="share-revoke-btn"
+                                        onClick={() => handleDelete(file.id, file.filename)}
+                                        disabled={deletingId === file.id}
+                                    >
+                                        {deletingId === file.id ? "Deleting…" : "Delete"}
                                     </button>
                                 </div>
                             </li>

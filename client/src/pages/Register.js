@@ -1,10 +1,27 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AuthHeader from "../components/AuthHeader";
 import GradientPageLayout from "../components/GradientPageLayout";
 import RecaptchaField from "../components/RecaptchaField";
-
-import { apiFetch, getNetworkErrorMessage } from "../utils/api";
+import { apiFetch, getApiUrl, getNetworkErrorMessage } from "../utils/api";
+import { getApiMode } from "../utils/apiDiscovery";
 import { PASSWORD_PATTERN, PASSWORD_RULE } from "../constants/password";
+
+function isLocalApiUrl(url) {
+    try {
+        const host = new URL(url).hostname;
+        return host === "localhost" || host === "127.0.0.1" || host === "::1";
+    } catch {
+        return false;
+    }
+}
+
+function shouldSkipRecaptcha() {
+    const mode = getApiMode();
+    if (mode === "local" || mode === "manual") {
+        return true;
+    }
+    return isLocalApiUrl(getApiUrl());
+}
 
 function Register({ onSwitchToLogin }) {
     const [username, setUsername] = useState("");
@@ -16,6 +33,38 @@ function Register({ onSwitchToLogin }) {
     const [recaptchaToken, setRecaptchaToken] = useState(null);
     const [recaptchaKey, setRecaptchaKey] = useState(0);
     const [submitting, setSubmitting] = useState(false);
+    const [recaptchaRequired, setRecaptchaRequired] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        if (shouldSkipRecaptcha()) {
+            setRecaptchaRequired(false);
+            return undefined;
+        }
+
+        fetch(`${getApiUrl()}/health`)
+            .then((res) => res.json())
+            .then((data) => {
+                if (cancelled) {
+                    return;
+                }
+                if (typeof data.recaptchaRequired === "boolean") {
+                    setRecaptchaRequired(data.recaptchaRequired);
+                } else {
+                    setRecaptchaRequired(true);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setRecaptchaRequired(!shouldSkipRecaptcha());
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const resetRecaptcha = () => {
         setRecaptchaToken(null);
@@ -32,7 +81,9 @@ function Register({ onSwitchToLogin }) {
             return;
         }
 
-        if (!recaptchaToken) {
+        const needsCaptcha = recaptchaRequired && !shouldSkipRecaptcha();
+
+        if (needsCaptcha && !recaptchaToken) {
             setError("Please complete the reCAPTCHA verification");
             return;
         }
@@ -42,7 +93,6 @@ function Register({ onSwitchToLogin }) {
         }
 
         setSubmitting(true);
-        const tokenUsed = recaptchaToken;
 
         try {
             const res = await apiFetch("/register", {
@@ -52,7 +102,7 @@ function Register({ onSwitchToLogin }) {
                     username,
                     email,
                     password,
-                    recaptchaToken: tokenUsed,
+                    ...(needsCaptcha ? { recaptchaToken } : {}),
                 }),
             });
 
@@ -60,19 +110,27 @@ function Register({ onSwitchToLogin }) {
 
             if (!res.ok) {
                 setError(data.message || "Registration failed");
-                resetRecaptcha();
+                if (needsCaptcha) {
+                    resetRecaptcha();
+                }
                 return;
             }
 
             setSuccess(data.message || "User registered successfully");
-            resetRecaptcha();
+            if (needsCaptcha) {
+                resetRecaptcha();
+            }
         } catch (err) {
             setError(getNetworkErrorMessage(err));
-            resetRecaptcha();
+            if (needsCaptcha) {
+                resetRecaptcha();
+            }
         } finally {
             setSubmitting(false);
         }
     };
+
+    const showCaptcha = recaptchaRequired && !shouldSkipRecaptcha();
 
     return (
         <GradientPageLayout>
@@ -110,10 +168,12 @@ function Register({ onSwitchToLogin }) {
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         required
                     />
-                    <RecaptchaField
-                        key={recaptchaKey}
-                        onTokenChange={setRecaptchaToken}
-                    />
+                    {showCaptcha && (
+                        <RecaptchaField
+                            key={recaptchaKey}
+                            onTokenChange={setRecaptchaToken}
+                        />
+                    )}
                     <button type="submit" disabled={submitting}>
                         {submitting ? "Registering…" : "Register"}
                     </button>

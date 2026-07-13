@@ -1,0 +1,9 @@
+If you see this file, the Windows zip has not been built yet.
+
+Developers: run from the server folder:
+  npm run build:local-package
+
+That creates HomeShare-Local-Windows.zip in this folder.
+Restart the React app (npm start) after building.
+
+On GitHub Pages: push to main and wait for the deploy workflow to finish.

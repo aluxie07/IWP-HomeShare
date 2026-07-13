@@ -1,0 +1,48 @@
+name: Build HomeShare Local Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, cursor/local-network-mode]
+    paths:
+      - "server/**"
+      - ".github/workflows/build-local-exe.yml"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Build portable ZIP (Node + server bundled)
+        working-directory: server
+        run: npm run build:local-package
+
+      - name: Try single EXE (optional)
+        working-directory: server
+        continue-on-error: true
+        run: npm run build:local-exe
+
+      - name: Copy EXE to downloads if built
+        shell: pwsh
+        run: |
+          if (Test-Path dist/local/HomeShare-Local.exe) {
+            Copy-Item dist/local/HomeShare-Local.exe client/public/downloads/HomeShare-Local.exe
+          }
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HomeShare-Local-Windows
+          path: |
+            dist/local/HomeShare-Local-Windows.zip
+            client/public/downloads/HomeShare-Local-Windows.zip
+            client/public/downloads/HomeShare-Local.exe
+          if-no-files-found: warn
+          retention-days: 90

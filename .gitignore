@@ -8,3 +8,6 @@ client/build/
 .DS_Store
 server/uploads/*
 !server/uploads/.gitkeep
+dist/
+client/public/downloads/HomeShare-Local.exe
+client/public/downloads/HomeShare-Local-Windows.zip
