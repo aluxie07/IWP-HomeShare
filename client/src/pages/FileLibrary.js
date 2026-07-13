@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import NetworkStatusIndicator from "../components/NetworkStatusIndicator";
 import ShareFileModal from "../components/ShareFileModal";
+import FileThumbnail from "../components/FileThumbnail";
 import {
     getApiUrl,
     authHeaders,
@@ -244,6 +245,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                     <ul className="file-list file-list--library">
                         {files.map((file) => (
                             <li key={file.id} className="file-list-item file-list-item--library">
+                                <FileThumbnail file={file} onAuthError={onRedirectToLogin} />
                                 <div className="file-list-details">
                                     <span className="file-list-name">{file.filename}</span>
                                     <span className="file-list-meta">
