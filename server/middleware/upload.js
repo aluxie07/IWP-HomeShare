@@ -21,13 +21,27 @@ const diskStorage = multer.diskStorage({
     },
 });
 
-const MAX_FILE_SIZE = Number(process.env.MAX_UPLOAD_BYTES) || 10 * 1024 * 1024;
+/** Cloud/GridFS default 10MB. Local disk mode: unlimited unless MAX_UPLOAD_BYTES is set. */
+function getMaxFileSize() {
+    if (process.env.MAX_UPLOAD_BYTES) {
+        const n = Number(process.env.MAX_UPLOAD_BYTES);
+        return Number.isFinite(n) && n > 0 ? n : null;
+    }
+    if (!shouldUseGridFS()) {
+        return null;
+    }
+    return 10 * 1024 * 1024;
+}
+
+const MAX_FILE_SIZE = getMaxFileSize();
 
 function runUpload(req, res, next) {
     const useGridFS = shouldUseGridFS();
     const storage = useGridFS ? multer.memoryStorage() : diskStorage;
+    const maxBytes = getMaxFileSize();
+    const limits = maxBytes ? { fileSize: maxBytes } : {};
 
-    multer({ storage, limits: { fileSize: MAX_FILE_SIZE } }).single("file")(req, res, (err) => {
+    multer({ storage, limits }).single("file")(req, res, (err) => {
         if (err) {
             next(err);
             return;
@@ -42,6 +56,7 @@ module.exports = {
     runUpload,
     uploadsDir,
     MAX_FILE_SIZE,
+    getMaxFileSize,
     makeStoredFilename,
     makeExplorerFilename,
 };

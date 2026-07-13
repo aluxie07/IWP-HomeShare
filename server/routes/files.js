@@ -2,7 +2,7 @@ const express = require("express");
 const fs = require("fs");
 const File = require("../models/File");
 const authMiddleware = require("../middleware/authMiddleware");
-const { runUpload, MAX_FILE_SIZE, makeStoredFilename } = require("../middleware/upload");
+const { runUpload, MAX_FILE_SIZE, getMaxFileSize, makeStoredFilename } = require("../middleware/upload");
 const requireMongo = require("../middleware/requireMongo");
 const {
     saveToGridFS,
@@ -63,8 +63,12 @@ router.post(
         runUpload(req, res, (err) => {
             if (err) {
                 if (err.code === "LIMIT_FILE_SIZE") {
+                    const maxBytes = getMaxFileSize();
+                    const maxLabel = maxBytes
+                        ? `${Math.round(maxBytes / (1024 * 1024))} MB`
+                        : "unlimited";
                     return res.status(400).json({
-                        message: `File is too large. Maximum size is ${Math.round(MAX_FILE_SIZE / (1024 * 1024))} MB.`,
+                        message: `File is too large. Maximum size is ${maxLabel}.`,
                     });
                 }
                 return res.status(400).json({ message: err.message || "Upload failed" });
