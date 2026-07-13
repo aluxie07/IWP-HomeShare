@@ -2,7 +2,7 @@ const express = require("express");
 const fs = require("fs");
 const File = require("../models/File");
 const authMiddleware = require("../middleware/authMiddleware");
-const { runUpload, MAX_FILE_SIZE, getMaxFileSize, makeStoredFilename } = require("../middleware/upload");
+const { runUpload, getMaxFileSize, makeStoredFilename } = require("../middleware/upload");
 const requireMongo = require("../middleware/requireMongo");
 const {
     saveToGridFS,
