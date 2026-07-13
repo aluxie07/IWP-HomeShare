@@ -1,10 +1,27 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AuthHeader from "../components/AuthHeader";
 import GradientPageLayout from "../components/GradientPageLayout";
 import RecaptchaField from "../components/RecaptchaField";
 import { saveAuth } from "../utils/authStorage";
+import { apiFetch, getApiUrl, getNetworkErrorMessage } from "../utils/api";
+import { getApiMode } from "../utils/apiDiscovery";
 
-import { apiFetch, getNetworkErrorMessage } from "../utils/api";
+function isLocalApiUrl(url) {
+    try {
+        const host = new URL(url).hostname;
+        return host === "localhost" || host === "127.0.0.1" || host === "::1";
+    } catch {
+        return false;
+    }
+}
+
+function shouldSkipRecaptcha() {
+    const mode = getApiMode();
+    if (mode === "local" || mode === "manual") {
+        return true;
+    }
+    return isLocalApiUrl(getApiUrl());
+}
 
 function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
     const [email, setEmail] = useState("");
@@ -15,6 +32,38 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
     const [resendMessage, setResendMessage] = useState("");
     const [recaptchaToken, setRecaptchaToken] = useState(null);
     const [recaptchaKey, setRecaptchaKey] = useState(0);
+    const [recaptchaRequired, setRecaptchaRequired] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        if (shouldSkipRecaptcha()) {
+            setRecaptchaRequired(false);
+            return undefined;
+        }
+
+        fetch(`${getApiUrl()}/health`)
+            .then((res) => res.json())
+            .then((data) => {
+                if (cancelled) {
+                    return;
+                }
+                if (typeof data.recaptchaRequired === "boolean") {
+                    setRecaptchaRequired(data.recaptchaRequired);
+                } else {
+                    setRecaptchaRequired(true);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setRecaptchaRequired(!shouldSkipRecaptcha());
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const resetRecaptcha = () => {
         setRecaptchaToken(null);
@@ -28,7 +77,9 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
         setNeedsVerification(false);
         setResendMessage("");
 
-        if (!recaptchaToken) {
+        const needsCaptcha = recaptchaRequired && !shouldSkipRecaptcha();
+
+        if (needsCaptcha && !recaptchaToken) {
             setError("Please complete the reCAPTCHA verification");
             return;
         }
@@ -37,7 +88,11 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
             const res = await apiFetch("/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, password, recaptchaToken }),
+                body: JSON.stringify({
+                    email,
+                    password,
+                    ...(needsCaptcha ? { recaptchaToken } : {}),
+                }),
             });
 
             const data = await res.json();
@@ -47,7 +102,9 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
                 if (data.code === "EMAIL_NOT_VERIFIED") {
                     setNeedsVerification(true);
                 }
-                resetRecaptcha();
+                if (needsCaptcha) {
+                    resetRecaptcha();
+                }
                 return;
             }
 
@@ -55,6 +112,7 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
                 saveAuth(data.token, {
                     username: data.username,
                     email,
+                    role: data.role || "user",
                 });
             }
 
@@ -62,7 +120,9 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
             onLoginSuccess?.();
         } catch (err) {
             setError(getNetworkErrorMessage(err));
-            resetRecaptcha();
+            if (needsCaptcha) {
+                resetRecaptcha();
+            }
         }
     };
 
@@ -85,6 +145,8 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
             setResendMessage(getNetworkErrorMessage(err));
         }
     };
+
+    const showCaptcha = recaptchaRequired && !shouldSkipRecaptcha();
 
     return (
         <GradientPageLayout>
@@ -112,10 +174,12 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
                     >
                         Forgot password?
                     </button>
-                    <RecaptchaField
-                        key={recaptchaKey}
-                        onTokenChange={setRecaptchaToken}
-                    />
+                    {showCaptcha && (
+                        <RecaptchaField
+                            key={recaptchaKey}
+                            onTokenChange={setRecaptchaToken}
+                        />
+                    )}
                     <button type="submit">Login</button>
                     <div className="message-area">
                         {success && <p className="success">{success}</p>}

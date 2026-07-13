@@ -8,3 +8,7 @@ client/build/
 .DS_Store
 server/uploads/*
 !server/uploads/.gitkeep
+dist/
+client/public/downloads/*.zip
+client/public/downloads/*.exe
+*.exe

@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const { setLastSyncOwnerId } = require("../utils/syncOwner");
 
 function authMiddleware(req, res, next) {
     // Step 1: Read token from request headers
@@ -23,6 +24,9 @@ function authMiddleware(req, res, next) {
 
         // Step 3: If valid — allow request
         req.user = decoded;
+        if (decoded?.id) {
+            setLastSyncOwnerId(decoded.id);
+        }
         next();
     } catch (err) {
         // Step 4: If invalid — deny access

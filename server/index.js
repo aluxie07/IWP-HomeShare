@@ -1,4 +1,19 @@
-require("dotenv").config();
+if (!process.env.HOMESHARE_DATA_DIR) {
+    require("dotenv").config();
+}
+
+// Local disk mode: create HomeShare Explorer folder BEFORE loading upload routes
+if ((process.env.FILE_STORAGE || "").trim().toLowerCase() === "disk") {
+    try {
+        const { setupExplorerFolder } = require("./utils/explorerFolder");
+        const explorer = setupExplorerFolder();
+        process.env.HOMESHARE_EXPLORER_DIR = explorer.root;
+        process.env.HOMESHARE_UPLOADS_DIR = explorer.filesDir;
+        console.log(`[HomeShare] Explorer folder ready: ${explorer.root}`);
+    } catch (err) {
+        console.warn(`[HomeShare] Explorer folder setup failed: ${err.message}`);
+    }
+}
 
 const mongoose = require("mongoose");
 
@@ -10,6 +25,8 @@ const dashboardRoutes = require("./routes/dashboard");
 const accountRoutes = require("./routes/account");
 const fileRoutes = require("./routes/files");
 const shareRoutes = require("./routes/shares");
+const networkRoutes = require("./routes/network");
+const attachNetworkContext = require("./middleware/attachNetworkContext");
 const {
     isEmailConfigured,
     getMissingEmailVars,
@@ -18,8 +35,13 @@ const {
 } = require("./utils/emailConfig");
 const { verifySmtpConnection } = require("./utils/mailer");
 const { shouldUseGridFS } = require("./utils/fileStorage");
+const { isRecaptchaRequired } = require("./middleware/verifyRecaptcha");
+const { getUploadsDir } = require("./utils/appPaths");
+const { migrateLegacyUploadsToExplorer } = require("./utils/migrateUploads");
+const { startExplorerWatcher } = require("./utils/explorerWatcher");
 
 const app = express();
+app.set("trust proxy", 1);
 
 function getAllowedOrigins() {
     const origins = new Set([
@@ -59,11 +81,13 @@ app.use(
     })
 );
 app.use(express.json());
+app.use(attachNetworkContext);
 app.use(authRoutes);
 app.use(dashboardRoutes);
 app.use(accountRoutes);
 app.use(fileRoutes);
 app.use(shareRoutes);
+app.use(networkRoutes);
 
 mongoose
     .connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000 })
@@ -86,6 +110,7 @@ app.get("/health", (req, res) => {
         ok: mongoConnected,
         mongo: mongoConnected ? "connected" : "disconnected",
         email: getEmailDiagnostics(),
+        recaptchaRequired: isRecaptchaRequired(),
     });
 });
 
@@ -106,6 +131,23 @@ app.listen(PORT, () => {
     console.log(
         `Files: storage = ${shouldUseGridFS() ? "gridfs (MongoDB)" : "local disk"} (FILE_STORAGE=${process.env.FILE_STORAGE || "gridfs"})`
     );
+
+    if (!shouldUseGridFS()) {
+        console.log(`Files: upload folder = ${getUploadsDir()}`);
+        migrateLegacyUploadsToExplorer()
+            .then(({ moved, targetDir }) => {
+                if (moved > 0) {
+                    console.log(
+                        `Files: moved ${moved} legacy upload(s) into Explorer folder (${targetDir})`
+                    );
+                }
+                startExplorerWatcher();
+            })
+            .catch((err) => {
+                console.warn(`Files: migration skipped (${err.message})`);
+                startExplorerWatcher();
+            });
+    }
 
     const diagnostics = getEmailDiagnostics();
     if (diagnostics.cloudHost && diagnostics.smtpConfigured && !diagnostics.brevoApiKeySet) {

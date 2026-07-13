@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { API_URL, authHeaders } from "../utils/api";
+import { getApiUrl, authHeaders } from "../utils/api";
 import { buildShareLink } from "../utils/urlTokens";
+import { canShareFile, getAccessModeLabel } from "../utils/accessModes";
 
 function ShareFileModal({ file, onClose, onShareUpdated }) {
     const [expiresInHours, setExpiresInHours] = useState("24");
@@ -20,7 +21,7 @@ function ShareFileModal({ file, onClose, onShareUpdated }) {
         setSubmitting(true);
 
         try {
-            const res = await fetch(`${API_URL}/files/${file.id}/share`, {
+            const res = await fetch(`${getApiUrl()}/files/${file.id}/share`, {
                 method: "POST",
                 headers: {
                     ...authHeaders(),
@@ -60,7 +61,7 @@ function ShareFileModal({ file, onClose, onShareUpdated }) {
         setIsError(false);
 
         try {
-            const res = await fetch(`${API_URL}/files/${file.id}/share`, {
+            const res = await fetch(`${getApiUrl()}/files/${file.id}/share`, {
                 method: "DELETE",
                 headers: authHeaders(),
             });
@@ -109,6 +110,20 @@ function ShareFileModal({ file, onClose, onShareUpdated }) {
                     Share file
                 </h3>
                 <p className="modal-file-name">{file.filename}</p>
+                <p className="share-modal-access-mode">
+                    Access mode: <strong>{getAccessModeLabel(file.accessMode)}</strong>
+                </p>
+                {file.accessMode === "local_only" && (
+                    <p className="share-modal-network-note">
+                        Recipients must be on the trusted network to download this file.
+                    </p>
+                )}
+                {!canShareFile(file) && (
+                    <p className="error">
+                        Private files cannot be shared. Change the access mode in your library
+                        first.
+                    </p>
+                )}
 
                 <form className="share-modal-form" onSubmit={handleCreateShare}>
                     <label className="share-modal-label">
@@ -139,7 +154,11 @@ function ShareFileModal({ file, onClose, onShareUpdated }) {
                         />
                         View only (no download)
                     </label>
-                    <button type="submit" className="logout-btn" disabled={submitting}>
+                    <button
+                        type="submit"
+                        className="logout-btn"
+                        disabled={submitting || !canShareFile(file)}
+                    >
                         {submitting ? "Creating…" : "Generate share link"}
                     </button>
                 </form>

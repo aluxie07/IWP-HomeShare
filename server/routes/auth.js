@@ -16,6 +16,14 @@ const {
 
 const router = express.Router();
 
+function resolveUserRole(email, isFirstUser) {
+    const adminEmail = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+    if (adminEmail && email.trim().toLowerCase() === adminEmail) {
+        return "admin";
+    }
+    return isFirstUser ? "admin" : "user";
+}
+
 async function setVerificationToken(user) {
     const token = generateVerificationToken();
     user.verificationToken = token;
@@ -73,12 +81,14 @@ router.post("/register", verifyRecaptchaMiddleware, async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
+        const isFirstUser = (await User.countDocuments()) === 0;
 
         const user = new User({
             username,
             email,
             password: hashedPassword,
             isVerified: false,
+            role: resolveUserRole(email, isFirstUser),
         });
 
         await user.save();
@@ -316,11 +326,18 @@ router.post("/login", verifyRecaptchaMiddleware, async (req, res) => {
             return res.status(500).json({ message: "Server configuration error" });
         }
 
+        const adminEmail = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+        if (adminEmail && user.email.trim().toLowerCase() === adminEmail && user.role !== "admin") {
+            user.role = "admin";
+            await user.save();
+        }
+
         const token = jwt.sign(
             {
                 id: user._id,
                 username: user.username,
                 email: user.email,
+                role: user.role || "user",
             },
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRES_IN || "24h" }
@@ -329,6 +346,7 @@ router.post("/login", verifyRecaptchaMiddleware, async (req, res) => {
         res.status(200).json({
             message: "Login successful",
             username: user.username,
+            role: user.role || "user",
             token,
         });
     } catch (err) {

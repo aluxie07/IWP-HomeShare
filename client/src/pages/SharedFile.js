@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-    API_URL,
+    getApiUrl,
     authHeaders,
     formatFileSize,
     formatUploadDate,
@@ -32,7 +32,7 @@ function SharedFile({ shareToken, onRedirectToLogin }) {
         const load = async () => {
             try {
                 const res = await fetch(
-                    `${API_URL}/shared/${encodeURIComponent(shareToken)}`,
+                    `${getApiUrl()}/shared/${encodeURIComponent(shareToken)}`,
                     { headers: authHeaders() }
                 );
                 const data = await res.json();
@@ -77,7 +77,7 @@ function SharedFile({ shareToken, onRedirectToLogin }) {
 
         try {
             const res = await fetch(
-                `${API_URL}/shared/${encodeURIComponent(shareToken)}/download`,
+                `${getApiUrl()}/shared/${encodeURIComponent(shareToken)}/download`,
                 { headers: authHeaders() }
             );
 
@@ -152,6 +152,16 @@ function SharedFile({ shareToken, onRedirectToLogin }) {
                                     {file.downloadsRemaining}
                                 </p>
                             )}
+                            {file.accessMode === "local_only" && (
+                                <p className="shared-file-local-only">
+                                    Local Only — download requires the trusted network.
+                                </p>
+                            )}
+                            {file.networkBlocked && file.networkMessage && (
+                                <p className="shared-file-network-blocked">
+                                    {file.networkMessage}
+                                </p>
+                            )}
                             {file.permission === "view" && (
                                 <p className="shared-file-view-only">
                                     This link is view-only. Download is disabled.
@@ -159,7 +169,7 @@ function SharedFile({ shareToken, onRedirectToLogin }) {
                             )}
                         </div>
 
-                        {file.canDownload && (
+                        {file.canDownload && !file.networkBlocked && (
                             <button
                                 type="button"
                                 className="logout-btn"
