@@ -1,7 +1,12 @@
 const USER_KEY = "user";
+const SESSION_TOKEN_KEY = "homeshare_session_token";
 
-/** Store non-secret profile for UI only. JWT lives in an httpOnly cookie. */
-export function saveAuth(user) {
+/**
+ * Store non-secret profile for UI.
+ * For Local Network Mode (HTTP API from HTTPS GitHub Pages), also keep a
+ * session token — Secure cookies cannot be set/sent to http://LAN-IP.
+ */
+export function saveAuth(user, sessionToken = null) {
     if (!user) {
         clearAuth();
         return;
@@ -15,6 +20,18 @@ export function saveAuth(user) {
             role: user.role || "user",
         })
     );
+
+    if (typeof sessionToken === "string" && sessionToken.trim()) {
+        sessionStorage.setItem(SESSION_TOKEN_KEY, sessionToken.trim());
+    }
+}
+
+export function getSessionToken() {
+    return sessionStorage.getItem(SESSION_TOKEN_KEY) || "";
+}
+
+export function clearSessionToken() {
+    sessionStorage.removeItem(SESSION_TOKEN_KEY);
 }
 
 export function getUser() {
@@ -38,6 +55,6 @@ export function isAdmin() {
 
 export function clearAuth() {
     localStorage.removeItem(USER_KEY);
-    // Remove legacy JWT if present from older builds
     localStorage.removeItem("token");
+    clearSessionToken();
 }

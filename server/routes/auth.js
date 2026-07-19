@@ -351,8 +351,11 @@ router.post("/login", verifyRecaptchaMiddleware, async (req, res) => {
 
         setAuthCookie(res, token);
 
+        // token is required for Local Network Mode: GitHub Pages (HTTPS) cannot
+        // store/send Secure cookies to http://LAN-IP:8080
         res.status(200).json({
             message: "Login successful",
+            token,
             username: user.username,
             email: user.email,
             role: user.role || "user",

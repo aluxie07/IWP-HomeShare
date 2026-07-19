@@ -9,8 +9,24 @@ const LOCAL_CANDIDATES = [
 ];
 const PROBE_TIMEOUT_MS = 5000;
 
-let activeApiUrl = CLOUD_API_URL || DEFAULT_LOCAL_URL;
-let activeMode = CLOUD_API_URL ? "cloud" : "local";
+function readInitialOverride() {
+    try {
+        return (localStorage.getItem(STORAGE_KEY) || "").trim().replace(/\/$/, "");
+    } catch {
+        return "";
+    }
+}
+
+const initialOverride = readInitialOverride();
+let activeApiUrl = initialOverride || CLOUD_API_URL || DEFAULT_LOCAL_URL;
+let activeMode = initialOverride
+    ? initialOverride.includes("127.0.0.1") ||
+      initialOverride.includes("localhost")
+        ? "local"
+        : "manual"
+    : CLOUD_API_URL
+      ? "cloud"
+      : "local";
 
 function isLoopbackUrl(url) {
     try {
@@ -50,7 +66,18 @@ export function setApiOverride(url) {
     }
 }
 
+function clearStoredSessionToken() {
+    try {
+        sessionStorage.removeItem("homeshare_session_token");
+    } catch {
+        // ignore
+    }
+}
+
 function setActive(url, mode) {
+    if (activeApiUrl && url && activeApiUrl.replace(/\/$/, "") !== url.replace(/\/$/, "")) {
+        clearStoredSessionToken();
+    }
     activeApiUrl = url;
     activeMode = mode;
     localStorage.setItem(STORAGE_MODE_KEY, mode);

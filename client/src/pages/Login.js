@@ -121,11 +121,14 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword, onApiMode
             const data = await res.json();
 
             if (res.ok) {
-                saveAuth({
-                    username: data.username,
-                    email: data.email || email,
-                    role: data.role || "user",
-                });
+                saveAuth(
+                    {
+                        username: data.username,
+                        email: data.email || email,
+                        role: data.role || "user",
+                    },
+                    data.token || null
+                );
             } else {
                 setError(data.message || "Invalid credentials");
                 if (data.code === "EMAIL_NOT_VERIFIED") {

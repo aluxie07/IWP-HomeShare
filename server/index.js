@@ -125,6 +125,7 @@ app.use(
             callback(null, false);
         },
         credentials: true,
+        allowedHeaders: ["Content-Type", "Authorization"],
     })
 );
 app.use(express.json());

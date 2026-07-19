@@ -1,4 +1,5 @@
 import { getDiscoveredApiUrl } from "./apiDiscovery";
+import { getSessionToken } from "./authStorage";
 
 const REQUEST_TIMEOUT_MS = 45000;
 
@@ -6,9 +7,18 @@ export function getApiUrl() {
     return getDiscoveredApiUrl();
 }
 
-/** Extra headers only — session auth is the httpOnly cookie (credentials: include). */
+/**
+ * Session auth: httpOnly cookie when possible (cloud HTTPS).
+ * Bearer token fallback for Local Network Mode (HTTPS site → HTTP LAN API),
+ * because Secure cookies cannot attach to http://192.168.x.x.
+ */
 export function authHeaders(extra = {}) {
-    return { ...extra };
+    const headers = { ...extra };
+    const token = getSessionToken();
+    if (token && !headers.Authorization) {
+        headers.Authorization = `Bearer ${token}`;
+    }
+    return headers;
 }
 
 export function getNetworkErrorMessage(err) {
@@ -30,9 +40,11 @@ export async function apiFetch(path, options = {}) {
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
+        const { headers: optionHeaders, ...rest } = options;
         return await fetch(`${getApiUrl()}${path}`, {
-            ...options,
+            ...rest,
             credentials: "include",
+            headers: authHeaders(optionHeaders || {}),
             signal: controller.signal,
         });
     } finally {
