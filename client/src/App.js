@@ -232,6 +232,13 @@ function App() {
                         onLoginSuccess={handleLoginSuccess}
                         onSwitchToRegister={() => setPage("register")}
                         onForgotPassword={() => setPage("forgot-password")}
+                        onApiModeChanged={(result) => {
+                            setApiDiscovery({
+                                mode: result.mode,
+                                url: result.url,
+                                ready: true,
+                            });
+                        }}
                     />
                 )}
                 {page === "forgot-password" && (

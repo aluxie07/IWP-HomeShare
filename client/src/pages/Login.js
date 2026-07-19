@@ -4,7 +4,7 @@ import GradientPageLayout from "../components/GradientPageLayout";
 import RecaptchaField from "../components/RecaptchaField";
 import { saveAuth } from "../utils/authStorage";
 import { apiFetch, getApiUrl, getNetworkErrorMessage } from "../utils/api";
-import { getApiMode } from "../utils/apiDiscovery";
+import { getApiMode, getCloudApiUrl, useCloudApi } from "../utils/apiDiscovery";
 
 function isLocalApiUrl(url) {
     try {
@@ -23,7 +23,7 @@ function shouldSkipRecaptcha() {
     return isLocalApiUrl(getApiUrl());
 }
 
-function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
+function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword, onApiModeChanged }) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
@@ -33,6 +33,13 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
     const [recaptchaToken, setRecaptchaToken] = useState(null);
     const [recaptchaKey, setRecaptchaKey] = useState(0);
     const [recaptchaRequired, setRecaptchaRequired] = useState(false);
+    const [switchingCloud, setSwitchingCloud] = useState(false);
+
+    const showUseCloud =
+        Boolean(getCloudApiUrl()) &&
+        (getApiMode() === "local" ||
+            getApiMode() === "manual" ||
+            isLocalApiUrl(getApiUrl()));
 
     useEffect(() => {
         let cancelled = false;
@@ -68,6 +75,22 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
     const resetRecaptcha = () => {
         setRecaptchaToken(null);
         setRecaptchaKey((k) => k + 1);
+    };
+
+    const handleUseCloud = async () => {
+        setSwitchingCloud(true);
+        setError("");
+        try {
+            const result = await useCloudApi();
+            onApiModeChanged?.(result);
+            setSuccess("Switched to cloud API. You can log in now.");
+            setRecaptchaRequired(true);
+            resetRecaptcha();
+        } catch (err) {
+            setError(err.message || "Could not switch to cloud API");
+        } finally {
+            setSwitchingCloud(false);
+        }
     };
 
     const handleLogin = async (e) => {
@@ -179,9 +202,25 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
                         />
                     )}
                     <button type="submit">Login</button>
+                    {showUseCloud && (
+                        <button
+                            type="button"
+                            className="auth-form__secondary-btn"
+                            onClick={handleUseCloud}
+                            disabled={switchingCloud}
+                        >
+                            {switchingCloud ? "Switching…" : "Use cloud API instead"}
+                        </button>
+                    )}
                     <div className="message-area">
                         {success && <p className="success">{success}</p>}
                         {error && <p className="error">{error}</p>}
+                        {showUseCloud && error && (
+                            <p className="files-muted">
+                                No local server is required for normal login. Use the cloud
+                                API button above.
+                            </p>
+                        )}
                         {needsVerification && (
                             <button
                                 type="button"
