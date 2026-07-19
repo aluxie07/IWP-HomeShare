@@ -302,24 +302,26 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                 onClick={() => setSelectedFileId(file.id)}
                             >
                                 <FileThumbnail file={file} onAuthError={onRedirectToLogin} />
-                                <span className="file-grid-tile__name" title={file.filename}>
-                                    {file.filename}
-                                </span>
-                                <span className="file-grid-tile__meta">
-                                    {file.uploadedBy || "Unknown"}
-                                </span>
-                                {(file.accessMode === "local_only" || file.share) && (
-                                    <span className="file-grid-tile__badges">
-                                        {file.accessMode === "local_only" && (
-                                            <span className="file-list-access-badge file-list-access-badge--local">
-                                                Local
-                                            </span>
-                                        )}
-                                        {file.share && (
-                                            <span className="file-list-share-badge">Shared</span>
-                                        )}
+                                <span className="file-grid-tile__body">
+                                    <span className="file-grid-tile__name" title={file.filename}>
+                                        {file.filename}
                                     </span>
-                                )}
+                                    <span className="file-grid-tile__meta">
+                                        {file.uploadedBy || "Unknown"}
+                                    </span>
+                                    {(file.accessMode === "local_only" || file.share) && (
+                                        <span className="file-grid-tile__badges">
+                                            {file.accessMode === "local_only" && (
+                                                <span className="file-list-access-badge file-list-access-badge--local">
+                                                    Local
+                                                </span>
+                                            )}
+                                            {file.share && (
+                                                <span className="file-list-share-badge">Shared</span>
+                                            )}
+                                        </span>
+                                    )}
+                                </span>
                             </button>
                         ))}
                     </div>
@@ -340,11 +342,13 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                     className="file-grid-tile file-grid-tile--deleted"
                                     onClick={() => setSelectedFileId(file.id)}
                                 >
-                                    <span className="file-grid-tile__name" title={file.filename}>
-                                        {file.filename}
-                                    </span>
-                                    <span className="file-grid-tile__meta">
-                                        Deleted by {file.deletedBy || "Unknown"}
+                                    <span className="file-grid-tile__body">
+                                        <span className="file-grid-tile__name" title={file.filename}>
+                                            {file.filename}
+                                        </span>
+                                        <span className="file-grid-tile__meta">
+                                            Deleted by {file.deletedBy || "Unknown"}
+                                        </span>
                                     </span>
                                 </button>
                             ))}

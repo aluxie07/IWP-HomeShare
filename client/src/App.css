@@ -12,49 +12,75 @@
 }
 
 .site-header {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  align-items: center;
-  padding: 1rem 2rem;
+  position: relative;
+  z-index: 200;
   border-bottom: 1px solid #ddd;
   background: #fff;
-  position: relative;
-  z-index: 1;
 }
 
-.header-slot {
+.site-header--menu-open {
+  z-index: 1200;
+}
+
+.header-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 2rem;
+}
+
+.header-desktop-nav {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1.25rem 1.75rem;
   min-width: 0;
 }
 
-.header-slot--logo {
-  justify-content: flex-start;
-  align-items: center;
-  align-self: center;
+.header-hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border: 1px solid #dde3ea;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
 }
 
-.header-slot--home {
-  justify-content: flex-start;
-  align-items: center;
-  align-self: center;
+.header-hamburger span {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: #222;
+  border-radius: 1px;
+  transition: transform 0.2s ease, opacity 0.2s ease;
 }
 
-.header-slot--dashboard,
-.header-slot--upload {
-  justify-content: flex-start;
-  align-items: center;
-  align-self: center;
+.header-hamburger--open span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
 }
 
-.header-slot--action {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  align-items: center;
-  align-self: center;
-  gap: 0.35rem;
+.header-hamburger--open span:nth-child(2) {
+  opacity: 0;
+}
+
+.header-hamburger--open span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+.header-menu-backdrop {
+  display: none;
+}
+
+.header-mobile-nav {
+  display: none;
 }
 
 .header-nav-link {
@@ -103,12 +129,83 @@
   background: none;
   cursor: pointer;
   line-height: 0;
+  flex-shrink: 0;
 }
 
 .header-logo {
   height: 30px;
   width: auto;
   display: block;
+}
+
+@media (max-width: 768px) {
+  .header-bar {
+    padding: 0.85rem 1rem;
+  }
+
+  .header-desktop-nav {
+    display: none;
+  }
+
+  .header-hamburger {
+    display: flex;
+  }
+
+  .header-menu-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    border: none;
+    background: rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+  }
+
+  .header-mobile-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    padding: 0.75rem 1rem 1.25rem;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+    transform: translateY(-0.5rem);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  .header-mobile-nav--open {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .header-mobile-nav[hidden] {
+    display: none !important;
+  }
+
+  .header-mobile-nav .header-nav-link {
+    width: 100%;
+    text-align: left;
+    font-size: 1.15rem;
+    padding: 0.85rem 0.35rem;
+  }
+
+  .header-mobile-nav .header-nav-link:hover {
+    transform: none;
+  }
+
+  .get-started-btn--mobile {
+    width: 100%;
+    margin-top: 0.35rem;
+  }
 }
 
 .main-content--gradient {
@@ -678,7 +775,7 @@
 }
 
 .files-page-card--grid {
-  max-width: 1100px;
+  max-width: none;
   width: 100%;
 }
 
@@ -727,23 +824,32 @@
   flex: none;
 }
 
+.file-grid-tile__body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
 .file-grid-tile__name {
   font-family: "Jost", sans-serif;
   font-weight: 600;
   font-size: 0.95rem;
   color: #222;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+  line-height: 1.35;
 }
 
 .file-grid-tile__meta {
   font-family: "Jost", sans-serif;
   font-size: 0.8rem;
   color: #667788;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
 }
 
 .file-grid-tile__badges {
@@ -846,13 +952,78 @@
   }
 }
 
-@media (max-width: 640px) {
-  .file-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+/* Mobile: scrollable vertical file list instead of grid tiles */
+@media (max-width: 768px) {
+  .dashboard-page--wide {
+    max-width: 100%;
+    padding: 1rem;
+  }
+
+  .files-page-card--grid {
+    padding: 1.25rem;
+  }
+
+  .file-grid,
+  .file-grid--deleted {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 1rem;
+    max-height: min(70vh, 640px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid #e8edf2;
+    border-radius: 12px;
+    background: #fff;
+  }
+
+  .file-grid-tile {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.85rem 1rem;
+    border: none;
+    border-bottom: 1px solid #eee;
+    border-radius: 0;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .file-grid-tile:last-child {
+    border-bottom: none;
+  }
+
+  .file-grid-tile:hover,
+  .file-grid-tile:focus-visible {
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+    background: #f5f8fb;
   }
 
   .file-grid-tile .file-thumb {
-    height: 90px;
+    width: 64px;
+    height: 64px;
+    flex: 0 0 64px;
+  }
+
+  .file-grid-tile__body {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .files-section-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .files-section-header-actions {
+    width: 100%;
+  }
+
+  .files-section-header-actions .file-download-btn,
+  .files-section-header-actions .logout-btn {
+    flex: 1 1 auto;
   }
 }
 
@@ -1211,7 +1382,7 @@
 }
 
 .dashboard-page--wide {
-  max-width: 640px;
+  max-width: min(1480px, 96vw);
 }
 
 .dashboard-network-panel {
