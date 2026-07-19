@@ -4,7 +4,7 @@ import GradientPageLayout from "../components/GradientPageLayout";
 import RecaptchaField from "../components/RecaptchaField";
 import { saveAuth } from "../utils/authStorage";
 import { apiFetch, getApiUrl, getNetworkErrorMessage } from "../utils/api";
-import { getApiMode, getCloudApiUrl, useCloudApi } from "../utils/apiDiscovery";
+import { getApiMode, getCloudApiUrl, switchToCloudApi } from "../utils/apiDiscovery";
 
 function isLocalApiUrl(url) {
     try {
@@ -81,7 +81,7 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword, onApiMode
         setSwitchingCloud(true);
         setError("");
         try {
-            const result = await useCloudApi();
+            const result = await switchToCloudApi();
             onApiModeChanged?.(result);
             setSuccess("Switched to cloud API. You can log in now.");
             setRecaptchaRequired(true);

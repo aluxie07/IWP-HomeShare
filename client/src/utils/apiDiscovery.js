@@ -139,7 +139,7 @@ export async function initApiDiscovery() {
 }
 
 /** Force cloud API (e.g. user wants to log in without local server). */
-export async function useCloudApi() {
+export async function switchToCloudApi() {
     setApiOverride("");
     if (!CLOUD_API_URL) {
         throw new Error(
