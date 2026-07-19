@@ -7,7 +7,7 @@ const LOCAL_CANDIDATES = [
     "http://127.0.0.1:8080",
     "http://localhost:8080",
 ];
-const PROBE_TIMEOUT_MS = 2500;
+const PROBE_TIMEOUT_MS = 5000;
 
 let activeApiUrl = CLOUD_API_URL || DEFAULT_LOCAL_URL;
 let activeMode = CLOUD_API_URL ? "cloud" : "local";
@@ -56,45 +56,83 @@ function setActive(url, mode) {
     localStorage.setItem(STORAGE_MODE_KEY, mode);
 }
 
-/**
- * Probe a base URL. For loopback from HTTPS (GitHub Pages), hint Chrome
- * Private Network Access with targetAddressSpace: "local".
- */
-async function probeApi(baseUrl) {
-    const normalized = String(baseUrl || "").trim().replace(/\/$/, "");
-    if (!normalized) {
-        return false;
-    }
-
+function buildProbeOptions(baseUrl, { useAddressSpace = true } = {}) {
     const options = {
         mode: "cors",
+        cache: "no-store",
         signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     };
 
-    if (isLoopbackUrl(normalized) && isHttpsPage()) {
-        // Chrome PNA: public HTTPS → local loopback
+    if (!useAddressSpace || !isHttpsPage()) {
+        return options;
+    }
+
+    if (isLoopbackUrl(baseUrl)) {
         options.targetAddressSpace = "local";
-    } else if (!isLoopbackUrl(normalized) && isHttpsPage()) {
-        try {
-            const host = new URL(normalized).hostname;
-            if (/^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(host)) {
-                options.targetAddressSpace = "private";
-            }
-        } catch {
-            // ignore
-        }
+        return options;
     }
 
     try {
-        const res = await fetch(`${normalized}/health`, options);
-        if (!res.ok) {
-            return false;
+        const host = new URL(baseUrl).hostname;
+        if (/^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(host)) {
+            options.targetAddressSpace = "private";
         }
-        const data = await res.json();
-        return data && typeof data === "object";
     } catch {
-        return false;
+        // ignore
     }
+
+    return options;
+}
+
+/**
+ * Probe a base URL. Returns { ok, error } so Detect can show a useful message.
+ */
+export async function probeApiDetailed(baseUrl) {
+    const normalized = String(baseUrl || "").trim().replace(/\/$/, "");
+    if (!normalized) {
+        return { ok: false, error: "empty url" };
+    }
+
+    const attempts = isHttpsPage()
+        ? [true, false] // try with PNA hint, then without
+        : [false];
+
+    let lastError = "unreachable";
+
+    for (const useAddressSpace of attempts) {
+        try {
+            const res = await fetch(
+                `${normalized}/health`,
+                buildProbeOptions(normalized, { useAddressSpace })
+            );
+            if (!res.ok) {
+                lastError = `HTTP ${res.status}`;
+                continue;
+            }
+            const data = await res.json();
+            if (data && typeof data === "object") {
+                return { ok: true, error: null };
+            }
+            lastError = "invalid health response";
+        } catch (err) {
+            const msg = String(err && err.message ? err.message : err);
+            if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) {
+                lastError =
+                    "browser blocked or could not reach the server (check Local network access permission, or try on the same PC as the server)";
+            } else if (/aborted|timeout/i.test(msg)) {
+                lastError = "timed out waiting for the local server";
+            } else {
+                lastError = msg;
+            }
+        }
+    }
+
+    return { ok: false, error: lastError };
+}
+
+async function probeApi(baseUrl) {
+    const result = await probeApiDetailed(baseUrl);
+    return result.ok;
 }
 
 /**
@@ -111,11 +149,9 @@ export async function initApiDiscovery() {
             setActive(override, mode);
             return { url: override, mode, connected: true };
         }
-        // Stale preference (local server closed, etc.)
         setApiOverride("");
     }
 
-    // Live GitHub Pages: stay on cloud unless the user clicks Detect
     if (onHttps) {
         if (CLOUD_API_URL) {
             const ok = await probeApi(CLOUD_API_URL);
@@ -131,7 +167,6 @@ export async function initApiDiscovery() {
         };
     }
 
-    // Local React dev (http://localhost:3000): try local server, then cloud
     const candidates = [
         { url: DEFAULT_LOCAL_URL, mode: "local" },
         { url: "http://localhost:8080", mode: "local" },
@@ -162,27 +197,41 @@ export async function initApiDiscovery() {
  * Explicit Detect on Local Network setup — probes localhost even from GitHub Pages.
  */
 export async function detectLocalServer() {
+    const errors = [];
     const seen = new Set();
+
     for (const url of LOCAL_CANDIDATES) {
         if (seen.has(url)) {
             continue;
         }
         seen.add(url);
-        if (await probeApi(url)) {
+        const result = await probeApiDetailed(url);
+        if (result.ok) {
             setApiOverride(url);
             setActive(url, "local");
             return { url, mode: "local", connected: true };
         }
+        errors.push(`${url}: ${result.error}`);
     }
 
     if (CLOUD_API_URL) {
         const ok = await probeApi(CLOUD_API_URL);
         setActive(CLOUD_API_URL, "cloud");
-        return { url: CLOUD_API_URL, mode: "cloud", connected: ok };
+        return {
+            url: CLOUD_API_URL,
+            mode: "cloud",
+            connected: ok,
+            detectError: errors.join(" · "),
+        };
     }
 
     setActive(DEFAULT_LOCAL_URL, "local");
-    return { url: DEFAULT_LOCAL_URL, mode: "local", connected: false };
+    return {
+        url: DEFAULT_LOCAL_URL,
+        mode: "local",
+        connected: false,
+        detectError: errors.join(" · "),
+    };
 }
 
 /** Force cloud API (e.g. user wants to log in without local server). */
@@ -204,10 +253,11 @@ export async function testAndSetApiOverride(url) {
         throw new Error("Enter a server address, e.g. http://192.168.1.100:8080");
     }
 
-    const ok = await probeApi(normalized);
-    if (!ok) {
+    const result = await probeApiDetailed(normalized);
+    if (!result.ok) {
         throw new Error(
-            "Could not reach that server. Check the address and that the local server is running."
+            result.error ||
+                "Could not reach that server. Check the address and that the local server is running."
         );
     }
 
@@ -219,3 +269,5 @@ export async function testAndSetApiOverride(url) {
         connected: true,
     };
 }
+
+export { DEFAULT_LOCAL_URL };

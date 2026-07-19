@@ -6,9 +6,9 @@ const SHARE_NAME = "HomeShare";
 
 function listLanIpv4() {
     const nets = os.networkInterfaces();
-    const ips = [];
+    const scored = [];
 
-    for (const entries of Object.values(nets)) {
+    for (const [ifaceName, entries] of Object.entries(nets)) {
         for (const net of entries || []) {
             const family = net.family === "IPv4" || net.family === 4;
             if (!family || net.internal) {
@@ -16,16 +16,42 @@ function listLanIpv4() {
             }
             const ip = net.address;
             if (
-                ip.startsWith("10.") ||
-                ip.startsWith("192.168.") ||
-                /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip)
+                !(
+                    ip.startsWith("10.") ||
+                    ip.startsWith("192.168.") ||
+                    /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip)
+                )
             ) {
-                ips.push(ip);
+                continue;
             }
+
+            let score = 100;
+            const name = String(ifaceName || "").toLowerCase();
+            // Prefer real Wi-Fi / Ethernet over VM / VPN adapters
+            if (/wi-?fi|wlan|wireless/.test(name)) {
+                score += 40;
+            } else if (/ethernet|eth\d|lan/.test(name)) {
+                score += 30;
+            }
+            if (
+                /virtual|vbox|vmware|hyper-v|vethernet|loopback|docker|wsl|vpn|tun|tap|bluetooth/.test(
+                    name
+                )
+            ) {
+                score -= 80;
+            }
+            // Common VirtualBox Host-Only default range
+            if (ip.startsWith("192.168.56.")) {
+                score -= 70;
+            }
+            // Hyper-V / Default Switch often 172.17–172.31 on virtual adapters already penalized
+
+            scored.push({ ip, score });
         }
     }
 
-    return [...new Set(ips)];
+    scored.sort((a, b) => b.score - a.score || a.ip.localeCompare(b.ip));
+    return [...new Set(scored.map((item) => item.ip))];
 }
 
 function runPowerShell(script) {

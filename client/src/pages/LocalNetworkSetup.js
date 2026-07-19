@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+    DEFAULT_LOCAL_URL,
     detectLocalServer,
     getApiMode,
     getDiscoveredApiUrl,
@@ -34,7 +35,14 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
         }
         try {
             const res = await fetch(`${String(baseUrl).replace(/\/$/, "")}/local/share-info`, {
-                signal: AbortSignal.timeout(2500),
+                mode: "cors",
+                cache: "no-store",
+                signal: AbortSignal.timeout(5000),
+                ...(typeof window !== "undefined" &&
+                window.location.protocol === "https:" &&
+                /127\.0\.0\.1|localhost/.test(baseUrl)
+                    ? { targetAddressSpace: "local" }
+                    : {}),
             });
             if (!res.ok) {
                 setShareInfo(null);
@@ -103,7 +111,6 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
         setIsError(false);
 
         try {
-            // Explicit Detect must probe localhost even on GitHub Pages HTTPS
             const result = await detectLocalServer();
             setApiMode(result.mode);
             setApiUrl(result.url);
@@ -116,10 +123,19 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                 );
                 setIsError(false);
             } else if (result.mode === "cloud" && result.connected) {
+                setManualUrl(DEFAULT_LOCAL_URL);
                 setStatus(
-                    "No local server on this PC (port 8080). Connected to cloud instead — keep the local window open, then Detect again."
+                    [
+                        "Could not reach http://127.0.0.1:8080 from this browser, so the site stayed on cloud.",
+                        "Do this on the same PC that is running the local server window.",
+                        "If Chrome/Edge asks for Local network access, click Allow, then Detect again.",
+                        "Or click “Connect to this PC” below.",
+                        result.detectError ? `(${result.detectError})` : "",
+                    ]
+                        .filter(Boolean)
+                        .join(" ")
                 );
-                setIsError(false);
+                setIsError(true);
             } else {
                 setStatus(
                     "No server responded. Download and run the starter below, then detect again."
@@ -128,6 +144,29 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
             }
         } catch {
             setStatus("Could not check for a local server.");
+            setIsError(true);
+        } finally {
+            setChecking(false);
+        }
+    };
+
+    const handleConnectThisPc = async () => {
+        setManualUrl(DEFAULT_LOCAL_URL);
+        setChecking(true);
+        setStatus("");
+        setIsError(false);
+        try {
+            const result = await testAndSetApiOverride(DEFAULT_LOCAL_URL);
+            setApiMode(result.mode);
+            setApiUrl(result.url);
+            setConnected(true);
+            onDiscoveryUpdated?.(result);
+            setStatus(`Connected to ${result.url}.`);
+            setIsError(false);
+        } catch (err) {
+            setStatus(
+                `${err.message || "Connect failed"}. Open this GitHub Pages site on the host PC (not a phone), keep the local server window open, and allow Local network access if the browser asks.`
+            );
             setIsError(true);
         } finally {
             setChecking(false);
@@ -316,6 +355,15 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                         disabled={checking}
                     >
                         {checking ? "Checking…" : "Detect local server"}
+                    </button>
+                    <button
+                        type="button"
+                        className="auth-form__secondary-btn"
+                        onClick={handleConnectThisPc}
+                        disabled={checking}
+                        style={{ marginLeft: "0.75rem" }}
+                    >
+                        Connect to this PC (127.0.0.1)
                     </button>
                 </div>
 
