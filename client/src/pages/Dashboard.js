@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import NetworkStatusIndicator from "../components/NetworkStatusIndicator";
-import { getApiUrl } from "../utils/api";
-import { getToken, getUser, saveAuth } from "../utils/authStorage";
+import { apiFetch, getNetworkErrorMessage } from "../utils/api";
+import { getUser, saveAuth, clearAuth } from "../utils/authStorage";
 
 function Dashboard({
     onRedirectToLogin,
@@ -18,24 +18,13 @@ function Dashboard({
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const token = getToken();
-
-        if (!token) {
-            onRedirectToLogin();
-            return;
-        }
-
         async function loadDashboard() {
             try {
-                const res = await fetch(`${getApiUrl()}/dashboard`, {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                });
-
+                const res = await apiFetch("/dashboard");
                 const data = await res.json();
 
                 if (res.status === 401) {
+                    clearAuth();
                     onRedirectToLogin();
                     return;
                 }
@@ -48,13 +37,13 @@ function Dashboard({
                 setMessage(data.message);
                 if (data.user) {
                     setUser(data.user);
-                    saveAuth(token, data.user);
+                    saveAuth(data.user);
                 }
                 if (data.network) {
                     setNetwork(data.network);
                 }
-            } catch {
-                setError("Could not reach server. Is the backend running?");
+            } catch (err) {
+                setError(getNetworkErrorMessage(err));
             } finally {
                 setLoading(false);
             }
@@ -62,6 +51,16 @@ function Dashboard({
 
         loadDashboard();
     }, [onRedirectToLogin]);
+
+    const handleLogout = async () => {
+        try {
+            await apiFetch("/logout", { method: "POST" });
+        } catch {
+            // Clear local state even if the network call fails
+        }
+        clearAuth();
+        onLogout?.();
+    };
 
     return (
         <section className="dashboard-page">
@@ -134,7 +133,7 @@ function Dashboard({
                     </button>
                 )}
                 <div className="dashboard-actions">
-                    <button type="button" className="logout-btn" onClick={onLogout}>
+                    <button type="button" className="logout-btn" onClick={handleLogout}>
                         Logout
                     </button>
                     <button

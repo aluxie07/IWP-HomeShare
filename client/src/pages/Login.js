@@ -97,7 +97,13 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
 
             const data = await res.json();
 
-            if (!res.ok) {
+            if (res.ok) {
+                saveAuth({
+                    username: data.username,
+                    email: data.email || email,
+                    role: data.role || "user",
+                });
+            } else {
                 setError(data.message || "Invalid credentials");
                 if (data.code === "EMAIL_NOT_VERIFIED") {
                     setNeedsVerification(true);
@@ -106,14 +112,6 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword }) {
                     resetRecaptcha();
                 }
                 return;
-            }
-
-            if (data.token) {
-                saveAuth(data.token, {
-                    username: data.username,
-                    email,
-                    role: data.role || "user",
-                });
             }
 
             setSuccess(data.message || "Login successful");

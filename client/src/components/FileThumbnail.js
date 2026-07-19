@@ -30,6 +30,7 @@ function FileThumbnail({ file, onAuthError }) {
         (async () => {
             try {
                 const res = await fetch(`${getApiUrl()}/files/${file.id}/download`, {
+                    credentials: "include",
                     headers: authHeaders(),
                 });
 

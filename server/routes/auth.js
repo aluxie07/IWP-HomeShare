@@ -13,6 +13,9 @@ const {
     verificationExpiry,
     passwordResetExpiry,
 } = require("../utils/verificationToken");
+const { setAuthCookie, clearAuthCookie, readAuthToken } = require("../utils/authCookie");
+const { hashSessionToken } = require("../utils/sessionToken");
+const authMiddleware = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
@@ -343,14 +346,57 @@ router.post("/login", verifyRecaptchaMiddleware, async (req, res) => {
             { expiresIn: process.env.JWT_EXPIRES_IN || "24h" }
         );
 
+        user.sessionTokenHash = hashSessionToken(token);
+        await user.save();
+
+        setAuthCookie(res, token);
+
         res.status(200).json({
             message: "Login successful",
             username: user.username,
+            email: user.email,
             role: user.role || "user",
-            token,
         });
     } catch (err) {
         res.status(500).json({ message: "Login failed", error: err.message });
+    }
+});
+
+router.post("/logout", async (req, res) => {
+    const token = readAuthToken(req);
+    if (token && process.env.JWT_SECRET) {
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            await User.findByIdAndUpdate(decoded.id, {
+                $unset: { sessionTokenHash: 1 },
+            });
+        } catch {
+            // Cookie may already be invalid; still clear it
+        }
+    }
+
+    clearAuthCookie(res);
+    res.status(200).json({ message: "Logged out" });
+});
+
+router.get("/me", authMiddleware, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).select("username email role");
+        if (!user) {
+            clearAuthCookie(res);
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        res.status(200).json({
+            user: {
+                id: user._id,
+                username: user.username,
+                email: user.email,
+                role: user.role || "user",
+            },
+        });
+    } catch {
+        res.status(500).json({ message: "Could not load session" });
     }
 });
 

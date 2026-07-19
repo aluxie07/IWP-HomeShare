@@ -2,6 +2,7 @@ const express = require("express");
 const bcrypt = require("bcrypt");
 const User = require("../models/User");
 const authMiddleware = require("../middleware/authMiddleware");
+const { clearAuthCookie } = require("../utils/authCookie");
 
 const router = express.Router();
 
@@ -26,6 +27,7 @@ router.delete("/account", authMiddleware, async (req, res) => {
         }
 
         await User.findByIdAndDelete(user._id);
+        clearAuthCookie(res);
 
         res.status(200).json({ message: "Your account has been deleted" });
     } catch (err) {

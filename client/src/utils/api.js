@@ -1,4 +1,3 @@
-import { getToken } from "./authStorage";
 import { getDiscoveredApiUrl } from "./apiDiscovery";
 
 const REQUEST_TIMEOUT_MS = 45000;
@@ -7,12 +6,9 @@ export function getApiUrl() {
     return getDiscoveredApiUrl();
 }
 
+/** Extra headers only — session auth is the httpOnly cookie (credentials: include). */
 export function authHeaders(extra = {}) {
-    const token = getToken();
-    return {
-        ...extra,
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
+    return { ...extra };
 }
 
 export function getNetworkErrorMessage(err) {
@@ -36,6 +32,7 @@ export async function apiFetch(path, options = {}) {
     try {
         return await fetch(`${getApiUrl()}${path}`, {
             ...options,
+            credentials: "include",
             signal: controller.signal,
         });
     } finally {

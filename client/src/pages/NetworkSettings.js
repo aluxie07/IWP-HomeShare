@@ -16,6 +16,7 @@ function NetworkSettings({ onRedirectToLogin, onBack }) {
         setLoading(true);
         try {
             const res = await fetch(`${getApiUrl()}/admin/network`, {
+                credentials: "include",
                 headers: authHeaders(),
             });
 
@@ -60,6 +61,7 @@ function NetworkSettings({ onRedirectToLogin, onBack }) {
         try {
             const res = await fetch(`${getApiUrl()}/admin/network/register`, {
                 method: "POST",
+                credentials: "include",
                 headers: {
                     ...authHeaders(),
                     "Content-Type": "application/json",
@@ -104,6 +106,7 @@ function NetworkSettings({ onRedirectToLogin, onBack }) {
         try {
             const res = await fetch(`${getApiUrl()}/admin/network`, {
                 method: "PUT",
+                credentials: "include",
                 headers: {
                     ...authHeaders(),
                     "Content-Type": "application/json",
@@ -142,6 +145,7 @@ function NetworkSettings({ onRedirectToLogin, onBack }) {
         try {
             const res = await fetch(`${getApiUrl()}/admin/network`, {
                 method: "DELETE",
+                credentials: "include",
                 headers: authHeaders(),
             });
 

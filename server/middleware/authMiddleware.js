@@ -1,14 +1,11 @@
 const jwt = require("jsonwebtoken");
+const User = require("../models/User");
+const { readAuthToken } = require("../utils/authCookie");
+const { hashSessionToken } = require("../utils/sessionToken");
 const { setLastSyncOwnerId } = require("../utils/syncOwner");
 
-function authMiddleware(req, res, next) {
-    // Step 1: Read token from request headers
-    const authHeader = req.headers.authorization;
-    let token = null;
-
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-        token = authHeader.split(" ")[1];
-    }
+async function authMiddleware(req, res, next) {
+    const token = readAuthToken(req);
 
     if (!token) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -18,18 +15,31 @@ function authMiddleware(req, res, next) {
         return res.status(500).json({ message: "Server configuration error" });
     }
 
-    // Step 2: Verify token using JWT_SECRET
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.id).select("sessionTokenHash role");
 
-        // Step 3: If valid — allow request
-        req.user = decoded;
+        if (!user || !user.sessionTokenHash) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        if (user.sessionTokenHash !== hashSessionToken(token)) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        req.user = {
+            id: decoded.id,
+            username: decoded.username,
+            email: decoded.email,
+            role: user.role || decoded.role || "user",
+        };
+
         if (decoded?.id) {
             setLastSyncOwnerId(decoded.id);
         }
+
         next();
-    } catch (err) {
-        // Step 4: If invalid — deny access
+    } catch {
         return res.status(401).json({ message: "Unauthorized" });
     }
 }

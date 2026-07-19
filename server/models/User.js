@@ -14,6 +14,8 @@ const userSchema = new mongoose.Schema({
         enum: ["user", "admin"],
         default: "user",
     },
+    /** SHA-256 of the current httpOnly session JWT (server-side session binding). */
+    sessionTokenHash: { type: String },
 });
 
 module.exports = mongoose.model("User", userSchema);

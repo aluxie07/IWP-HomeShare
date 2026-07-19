@@ -5,7 +5,7 @@ import {
     formatFileSize,
     formatUploadDate,
 } from "../utils/api";
-import { getToken } from "../utils/authStorage";
+import { isLoggedIn } from "../utils/authStorage";
 
 function SharedFile({ shareToken, onRedirectToLogin }) {
     const [file, setFile] = useState(null);
@@ -21,7 +21,7 @@ function SharedFile({ shareToken, onRedirectToLogin }) {
             return;
         }
 
-        if (!getToken()) {
+        if (!isLoggedIn()) {
             sessionStorage.setItem("pendingShare", shareToken);
             onRedirectToLogin();
             return;
@@ -33,7 +33,7 @@ function SharedFile({ shareToken, onRedirectToLogin }) {
             try {
                 const res = await fetch(
                     `${getApiUrl()}/shared/${encodeURIComponent(shareToken)}`,
-                    { headers: authHeaders() }
+                    { headers: authHeaders(), credentials: "include" }
                 );
                 const data = await res.json();
 
@@ -78,7 +78,7 @@ function SharedFile({ shareToken, onRedirectToLogin }) {
         try {
             const res = await fetch(
                 `${getApiUrl()}/shared/${encodeURIComponent(shareToken)}/download`,
-                { headers: authHeaders() }
+                { headers: authHeaders(), credentials: "include" }
             );
 
             if (res.status === 401) {

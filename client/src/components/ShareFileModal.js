@@ -23,6 +23,7 @@ function ShareFileModal({ file, onClose, onShareUpdated }) {
         try {
             const res = await fetch(`${getApiUrl()}/files/${file.id}/share`, {
                 method: "POST",
+                credentials: "include",
                 headers: {
                     ...authHeaders(),
                     "Content-Type": "application/json",
@@ -63,6 +64,7 @@ function ShareFileModal({ file, onClose, onShareUpdated }) {
         try {
             const res = await fetch(`${getApiUrl()}/files/${file.id}/share`, {
                 method: "DELETE",
+                credentials: "include",
                 headers: authHeaders(),
             });
 

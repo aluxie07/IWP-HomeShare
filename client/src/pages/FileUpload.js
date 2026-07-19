@@ -8,6 +8,7 @@ const FIVE_GB = 5 * 1024 * 1024 * 1024;
 async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLogin }) {
     const initRes = await fetch(`${getApiUrl()}/files/upload/init`, {
         method: "POST",
+        credentials: "include",
         headers: {
             ...authHeaders(),
             "Content-Type": "application/json",
@@ -42,6 +43,7 @@ async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLo
                 `${getApiUrl()}/files/upload/${uploadId}/chunks/${index}`,
                 {
                     method: "PUT",
+                    credentials: "include",
                     headers: {
                         ...authHeaders(),
                         "Content-Type": "application/octet-stream",
@@ -65,6 +67,7 @@ async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLo
 
         const doneRes = await fetch(`${getApiUrl()}/files/upload/${uploadId}/complete`, {
             method: "POST",
+            credentials: "include",
             headers: authHeaders(),
         });
 
@@ -83,6 +86,7 @@ async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLo
         if (err.message !== "UNAUTHORIZED") {
             fetch(`${getApiUrl()}/files/upload/${uploadId}`, {
                 method: "DELETE",
+                credentials: "include",
                 headers: authHeaders(),
             }).catch(() => {});
         }
@@ -104,6 +108,7 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
         setLoadingList(true);
         try {
             const res = await fetch(`${getApiUrl()}/files`, {
+                credentials: "include",
                 headers: authHeaders(),
             });
 

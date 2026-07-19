@@ -23,6 +23,7 @@ import {
     isLoggedIn as hasStoredAuth,
     clearAuth,
 } from "./utils/authStorage";
+import { apiFetch } from "./utils/api";
 import {
     getVerifyTokenFromUrl,
     getResetTokenFromUrl,
@@ -128,7 +129,12 @@ function App() {
         page === "forgot-password" ||
         page === "reset-password";
 
-    const redirectToLogin = () => {
+    const redirectToLogin = async () => {
+        try {
+            await apiFetch("/logout", { method: "POST" });
+        } catch {
+            // ignore
+        }
         clearAuth();
         setIsLoggedIn(false);
         setPage("login");

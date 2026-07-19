@@ -26,6 +26,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
 
         try {
             const res = await fetch(`${getApiUrl()}/files`, {
+                credentials: "include",
                 headers: authHeaders(),
             });
 
@@ -61,6 +62,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         try {
             const syncRes = await fetch(`${getApiUrl()}/files/sync-folder`, {
                 method: "POST",
+                credentials: "include",
                 headers: authHeaders(),
             });
 
@@ -85,6 +87,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
 
             // Fallback: list only (e.g. cloud API without sync route)
             const res = await fetch(`${getApiUrl()}/files`, {
+                credentials: "include",
                 headers: authHeaders(),
             });
 
@@ -119,6 +122,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         try {
             const res = await fetch(`${getApiUrl()}/files/${fileId}`, {
                 method: "DELETE",
+                credentials: "include",
                 headers: authHeaders(),
             });
 
@@ -148,6 +152,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         try {
             const res = await fetch(`${getApiUrl()}/files/${fileId}/access-mode`, {
                 method: "PATCH",
+                credentials: "include",
                 headers: {
                     ...authHeaders(),
                     "Content-Type": "application/json",
@@ -173,6 +178,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
     const handleDownload = async (fileId, filename) => {
         try {
             const res = await fetch(`${getApiUrl()}/files/${fileId}/download`, {
+                credentials: "include",
                 headers: authHeaders(),
             });
 

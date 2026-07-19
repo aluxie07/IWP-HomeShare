@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { getApiUrl } from "../utils/api";
-import { clearAuth, getToken } from "../utils/authStorage";
+import { apiFetch, getNetworkErrorMessage } from "../utils/api";
+import { clearAuth } from "../utils/authStorage";
 
 function DeleteAccount({ onCancel, onAccountDeleted }) {
     const [password, setPassword] = useState("");
@@ -10,21 +10,13 @@ function DeleteAccount({ onCancel, onAccountDeleted }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
-
-        const token = getToken();
-        if (!token) {
-            onAccountDeleted();
-            return;
-        }
-
         setSubmitting(true);
 
         try {
-            const res = await fetch(`${getApiUrl()}/account`, {
+            const res = await apiFetch("/account", {
                 method: "DELETE",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({ password }),
             });
@@ -48,8 +40,8 @@ function DeleteAccount({ onCancel, onAccountDeleted }) {
 
             clearAuth();
             onAccountDeleted(data.message);
-        } catch {
-            setError("Could not reach server. Is the backend running?");
+        } catch (err) {
+            setError(getNetworkErrorMessage(err));
         } finally {
             setSubmitting(false);
         }

@@ -31,6 +31,7 @@ function NetworkStatusIndicator({ compact = false, initialStatus = null }) {
         async function load() {
             try {
                 const res = await fetch(`${getApiUrl()}/network/status`, {
+                    credentials: "include",
                     headers: authHeaders(),
                 });
 

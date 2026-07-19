@@ -1,13 +1,20 @@
-const TOKEN_KEY = "token";
 const USER_KEY = "user";
 
-export function saveAuth(token, user) {
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
-}
-
-export function getToken() {
-    return localStorage.getItem(TOKEN_KEY);
+/** Store non-secret profile for UI only. JWT lives in an httpOnly cookie. */
+export function saveAuth(user) {
+    if (!user) {
+        clearAuth();
+        return;
+    }
+    localStorage.setItem(
+        USER_KEY,
+        JSON.stringify({
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            role: user.role || "user",
+        })
+    );
 }
 
 export function getUser() {
@@ -21,7 +28,7 @@ export function getUser() {
 }
 
 export function isLoggedIn() {
-    return Boolean(getToken());
+    return Boolean(getUser());
 }
 
 export function isAdmin() {
@@ -30,6 +37,7 @@ export function isAdmin() {
 }
 
 export function clearAuth() {
-    localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    // Remove legacy JWT if present from older builds
+    localStorage.removeItem("token");
 }

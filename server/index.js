@@ -124,9 +124,11 @@ app.use(
             // Reject without throwing (throwing becomes a 500 and breaks Detect)
             callback(null, false);
         },
+        credentials: true,
     })
 );
 app.use(express.json());
+app.use(require("cookie-parser")());
 app.use(attachNetworkContext);
 app.use(authRoutes);
 app.use(dashboardRoutes);
