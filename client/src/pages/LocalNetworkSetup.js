@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import {
+    detectLocalServer,
     getApiMode,
     getDiscoveredApiUrl,
     getStoredApiOverride,
-    initApiDiscovery,
-    setApiOverride,
+    switchToCloudApi,
     testAndSetApiOverride,
 } from "../utils/apiDiscovery";
 
@@ -97,45 +97,14 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
         }
     };
 
-    useEffect(() => {
-        let cancelled = false;
-
-        fetch(LOCAL_ZIP_URL, { method: "HEAD" })
-            .then((res) => {
-                if (!cancelled) {
-                    setZipAvailable(res.ok);
-                }
-            })
-            .catch(() => {
-                if (!cancelled) {
-                    setZipAvailable(false);
-                }
-            });
-
-        fetch(LOCAL_EXE_URL, { method: "HEAD" })
-            .then((res) => {
-                if (!cancelled) {
-                    setExeAvailable(res.ok);
-                }
-            })
-            .catch(() => {
-                if (!cancelled) {
-                    setExeAvailable(false);
-                }
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, []);
-
     const refreshDiscovery = async () => {
         setChecking(true);
         setStatus("");
         setIsError(false);
 
         try {
-            const result = await initApiDiscovery();
+            // Explicit Detect must probe localhost even on GitHub Pages HTTPS
+            const result = await detectLocalServer();
             setApiMode(result.mode);
             setApiUrl(result.url);
             setConnected(result.connected);
@@ -148,7 +117,7 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                 setIsError(false);
             } else if (result.mode === "cloud" && result.connected) {
                 setStatus(
-                    "Connected to the cloud API. Run the local server starter on this PC, then click “Detect local server” again."
+                    "No local server on this PC (port 8080). Connected to cloud instead — keep the local window open, then Detect again."
                 );
                 setIsError(false);
             } else {
@@ -187,16 +156,27 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
         }
     };
 
-    const handleUseCloud = () => {
-        setApiOverride("");
-        const cloud = process.env.REACT_APP_API_URL;
-        if (cloud) {
-            setManualUrl("");
-            setStatus("Cleared local override. Refreshing…");
-            refreshDiscovery();
-        } else {
-            setStatus("No cloud API URL configured in this build.");
+    const handleUseCloud = async () => {
+        setChecking(true);
+        setStatus("");
+        setIsError(false);
+        try {
+            const result = await switchToCloudApi();
+            setApiMode(result.mode);
+            setApiUrl(result.url);
+            setConnected(result.connected);
+            onDiscoveryUpdated?.(result);
+            setStatus(
+                result.connected
+                    ? "Switched to the cloud API. Detect again anytime to use the local server on this PC."
+                    : "Cleared local override, but cloud API did not respond."
+            );
+            setIsError(!result.connected);
+        } catch (err) {
+            setStatus(err.message || "No cloud API URL configured in this build.");
             setIsError(true);
+        } finally {
+            setChecking(false);
         }
     };
 
@@ -323,9 +303,11 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
 
                     <h3 className="files-section-title">Step 3 — Detect local server</h3>
                     <p className="files-muted">
-                        Detection only works while this PC’s local server is running. The live
-                        site talks to <code>http://127.0.0.1:8080</code> — if Detect fails,
-                        restart the local server (needs the latest build) and try again.
+                        Keep the local server window open, then click Detect. This probes{" "}
+                        <code>http://127.0.0.1:8080</code> from the site (normal browsing stays
+                        on cloud until you Detect). If Detect still fails, try entering that
+                        address in the box below, or allow local network access if the browser
+                        prompts you.
                     </p>
                     <button
                         type="button"

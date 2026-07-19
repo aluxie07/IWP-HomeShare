@@ -3,6 +3,10 @@ const STORAGE_MODE_KEY = "homeshare_api_mode";
 
 const CLOUD_API_URL = (process.env.REACT_APP_API_URL || "").replace(/\/$/, "");
 const DEFAULT_LOCAL_URL = "http://127.0.0.1:8080";
+const LOCAL_CANDIDATES = [
+    "http://127.0.0.1:8080",
+    "http://localhost:8080",
+];
 const PROBE_TIMEOUT_MS = 2500;
 
 let activeApiUrl = CLOUD_API_URL || DEFAULT_LOCAL_URL;
@@ -52,16 +56,37 @@ function setActive(url, mode) {
     localStorage.setItem(STORAGE_MODE_KEY, mode);
 }
 
+/**
+ * Probe a base URL. For loopback from HTTPS (GitHub Pages), hint Chrome
+ * Private Network Access with targetAddressSpace: "local".
+ */
 async function probeApi(baseUrl) {
     const normalized = String(baseUrl || "").trim().replace(/\/$/, "");
     if (!normalized) {
         return false;
     }
 
+    const options = {
+        mode: "cors",
+        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+    };
+
+    if (isLoopbackUrl(normalized) && isHttpsPage()) {
+        // Chrome PNA: public HTTPS → local loopback
+        options.targetAddressSpace = "local";
+    } else if (!isLoopbackUrl(normalized) && isHttpsPage()) {
+        try {
+            const host = new URL(normalized).hostname;
+            if (/^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(host)) {
+                options.targetAddressSpace = "private";
+            }
+        } catch {
+            // ignore
+        }
+    }
+
     try {
-        const res = await fetch(`${normalized}/health`, {
-            signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
-        });
+        const res = await fetch(`${normalized}/health`, options);
         if (!res.ok) {
             return false;
         }
@@ -73,29 +98,24 @@ async function probeApi(baseUrl) {
 }
 
 /**
- * Prefer cloud on the live HTTPS site so login works without a local server.
- * Localhost is only probed in local/dev, or when the user saved a local override.
+ * Prefer cloud on the live HTTPS site so normal login works without a local server.
+ * Saved overrides (including localhost after Detect) are still tried.
  */
 export async function initApiDiscovery() {
     const override = getStoredApiOverride();
     const onHttps = isHttpsPage();
 
-    // Explicit override from Local Network setup — try it, drop if dead.
-    // On HTTPS (GitHub Pages), never probe loopback: it only spams
-    // ERR_CONNECTION_REFUSED when no local server is running.
     if (override) {
-        if (onHttps && isLoopbackUrl(override)) {
-            setApiOverride("");
-        } else if (await probeApi(override)) {
+        if (await probeApi(override)) {
             const mode = isLoopbackUrl(override) ? "local" : "manual";
             setActive(override, mode);
             return { url: override, mode, connected: true };
-        } else {
-            setApiOverride("");
         }
+        // Stale preference (local server closed, etc.)
+        setApiOverride("");
     }
 
-    // Live GitHub Pages / any HTTPS deploy: use cloud API, do not probe localhost
+    // Live GitHub Pages: stay on cloud unless the user clicks Detect
     if (onHttps) {
         if (CLOUD_API_URL) {
             const ok = await probeApi(CLOUD_API_URL);
@@ -136,6 +156,33 @@ export async function initApiDiscovery() {
     const fallbackMode = CLOUD_API_URL ? "cloud" : "local";
     setActive(fallbackUrl, fallbackMode);
     return { url: fallbackUrl, mode: fallbackMode, connected: false };
+}
+
+/**
+ * Explicit Detect on Local Network setup — probes localhost even from GitHub Pages.
+ */
+export async function detectLocalServer() {
+    const seen = new Set();
+    for (const url of LOCAL_CANDIDATES) {
+        if (seen.has(url)) {
+            continue;
+        }
+        seen.add(url);
+        if (await probeApi(url)) {
+            setApiOverride(url);
+            setActive(url, "local");
+            return { url, mode: "local", connected: true };
+        }
+    }
+
+    if (CLOUD_API_URL) {
+        const ok = await probeApi(CLOUD_API_URL);
+        setActive(CLOUD_API_URL, "cloud");
+        return { url: CLOUD_API_URL, mode: "cloud", connected: ok };
+    }
+
+    setActive(DEFAULT_LOCAL_URL, "local");
+    return { url: DEFAULT_LOCAL_URL, mode: "local", connected: false };
 }
 
 /** Force cloud API (e.g. user wants to log in without local server). */

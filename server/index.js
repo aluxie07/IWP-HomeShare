@@ -107,11 +107,10 @@ function isAllowedOrigin(origin) {
     return false;
 }
 
-// Chrome Private Network Access: HTTPS public site → http://127.0.0.1
+// Chrome Private Network Access: HTTPS public site (GitHub Pages) → http://127.0.0.1
+// Always allow on this local server so Detect / health work from the live site.
 app.use((req, res, next) => {
-    if (req.headers["access-control-request-private-network"] === "true") {
-        res.setHeader("Access-Control-Allow-Private-Network", "true");
-    }
+    res.setHeader("Access-Control-Allow-Private-Network", "true");
     next();
 });
 
