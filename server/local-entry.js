@@ -57,6 +57,16 @@ async function main() {
         console.log("  ======================");
         console.log(`  Config: ${envPath}`);
         console.log(`  Files in Explorer: ${explorer.root}`);
+        if (explorer.folderShare?.preferredUnc || explorer.folderShare?.uncPaths?.[0]) {
+            console.log(
+                `  Shared folder: ${explorer.folderShare.preferredUnc || explorer.folderShare.uncPaths[0]}`
+            );
+            console.log("  Other PCs: paste that path in File Explorer to join the same folder.");
+        } else if (explorer.folderShare && !explorer.folderShare.enabled) {
+            console.log(
+                "  Folder share: run as Administrator once if others cannot map \\\\YOUR-IP\\HomeShare"
+            );
+        }
         console.log(`  API: http://127.0.0.1:${process.env.PORT || 8080}`);
         console.log("  Look for HomeShare in Quick Access / on your Desktop.");
         console.log("  Keep this window open. On the website click Detect local server.");

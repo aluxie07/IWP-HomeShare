@@ -1328,6 +1328,37 @@
   text-align: left;
 }
 
+.local-setup-join-folder {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e4e9ef;
+}
+
+.local-setup-unc {
+  margin: 0.75rem 0;
+}
+
+.local-setup-unc code {
+  display: inline-block;
+  padding: 0.45rem 0.65rem;
+  background: #eef2f6;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  word-break: break-all;
+}
+
+.local-setup-join-steps {
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+  font-family: "Jost", sans-serif;
+  color: #444;
+  line-height: 1.5;
+}
+
+.local-setup-join-steps li {
+  margin-bottom: 0.35rem;
+}
+
 .local-setup-downloads {
   display: flex;
   flex-wrap: wrap;

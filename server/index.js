@@ -36,6 +36,7 @@ const {
 } = require("./utils/emailConfig");
 const { verifySmtpConnection } = require("./utils/mailer");
 const { getStorageMode, shouldUseDisk, areCloudShardsConfigured } = require("./utils/fileStorage");
+const { getFolderShareInfo } = require("./utils/folderShare");
 const { isRecaptchaRequired } = require("./middleware/verifyRecaptcha");
 const { getUploadsDir } = require("./utils/appPaths");
 const { migrateLegacyUploadsToExplorer } = require("./utils/migrateUploads");
@@ -154,12 +155,41 @@ app.get("/", (req, res) => {
 
 app.get("/health", (req, res) => {
     const mongoConnected = mongoose.connection.readyState === 1;
-    res.status(mongoConnected ? 200 : 503).json({
+    const payload = {
         ok: mongoConnected,
         mongo: mongoConnected ? "connected" : "disconnected",
         email: getEmailDiagnostics(),
         recaptchaRequired: isRecaptchaRequired(),
-    });
+    };
+
+    if (shouldUseDisk()) {
+        try {
+            payload.folderShare = getFolderShareInfo();
+        } catch {
+            payload.folderShare = { enabled: false };
+        }
+    }
+
+    res.status(mongoConnected ? 200 : 503).json(payload);
+});
+
+/** Public on local disk servers — join instructions for other PCs on the LAN */
+app.get("/local/share-info", (req, res) => {
+    if (!shouldUseDisk()) {
+        return res.status(200).json({
+            enabled: false,
+            message: "Folder sharing is only available when the local disk server is running.",
+        });
+    }
+
+    try {
+        res.status(200).json(getFolderShareInfo());
+    } catch (err) {
+        res.status(500).json({
+            enabled: false,
+            message: err.message || "Could not load share info",
+        });
+    }
 });
 
 app.get("/health/smtp", async (req, res) => {

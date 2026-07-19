@@ -155,6 +155,11 @@ function writeReadme(folder) {
             "Put files in the Files\\ folder to upload them to your local HomeShare server.",
             "Delete files here to remove them from your HomeShare library too.",
             "",
+            "Other people on the same Wi-Fi can open this same folder:",
+            "  1. Open File Explorer on their PC",
+            "  2. Paste \\\\YOUR-LAN-IP\\HomeShare in the address bar",
+            "  3. Map network drive if they want it to stay",
+            "",
             "Deleting or uploading on the website also updates this folder.",
             "Keep the local HomeShare server running while you sync.",
             "",
@@ -206,7 +211,15 @@ function setupExplorerFolder() {
     pinToQuickAccess(root);
     createDesktopShortcut(root, iconPath && fs.existsSync(iconPath) ? iconPath : null);
 
-    return { root, filesDir };
+    let folderShare = null;
+    try {
+        const { ensureFolderShare } = require("./folderShare");
+        folderShare = ensureFolderShare(root);
+    } catch (err) {
+        console.warn(`[HomeShare] Folder share setup skipped: ${err.message}`);
+    }
+
+    return { root, filesDir, folderShare };
 }
 
 module.exports = {

@@ -24,6 +24,78 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
     const [checking, setChecking] = useState(false);
     const [zipAvailable, setZipAvailable] = useState(null);
     const [exeAvailable, setExeAvailable] = useState(null);
+    const [shareInfo, setShareInfo] = useState(null);
+    const [copyNote, setCopyNote] = useState("");
+
+    const loadShareInfo = async (baseUrl) => {
+        if (!baseUrl) {
+            setShareInfo(null);
+            return;
+        }
+        try {
+            const res = await fetch(`${String(baseUrl).replace(/\/$/, "")}/local/share-info`, {
+                signal: AbortSignal.timeout(2500),
+            });
+            if (!res.ok) {
+                setShareInfo(null);
+                return;
+            }
+            const data = await res.json();
+            setShareInfo(data);
+        } catch {
+            setShareInfo(null);
+        }
+    };
+
+    useEffect(() => {
+        let cancelled = false;
+
+        fetch(LOCAL_ZIP_URL, { method: "HEAD" })
+            .then((res) => {
+                if (!cancelled) {
+                    setZipAvailable(res.ok);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setZipAvailable(false);
+                }
+            });
+
+        fetch(LOCAL_EXE_URL, { method: "HEAD" })
+            .then((res) => {
+                if (!cancelled) {
+                    setExeAvailable(res.ok);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setExeAvailable(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (connected && (apiMode === "local" || apiMode === "manual")) {
+            loadShareInfo(apiUrl);
+        } else {
+            setShareInfo(null);
+        }
+    }, [connected, apiMode, apiUrl]);
+
+    const copyText = async (text) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopyNote("Copied!");
+            setTimeout(() => setCopyNote(""), 2000);
+        } catch {
+            setCopyNote("Copy failed — select the path and copy manually.");
+        }
+    };
 
     useEffect(() => {
         let cancelled = false;
@@ -300,6 +372,51 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                         </button>
                     )}
                 </div>
+
+                {isLocalActive && (
+                    <div className="local-setup-join-folder">
+                        <h3 className="files-section-title">Join the shared HomeShare folder</h3>
+                        <p className="files-muted">
+                            The host PC shares the same Explorer folder on the LAN. Other
+                            Windows PCs can open it and see the same files.
+                        </p>
+                        {shareInfo?.preferredUnc || shareInfo?.uncPaths?.[0] ? (
+                            <>
+                                <p className="local-setup-unc">
+                                    <code>{shareInfo.preferredUnc || shareInfo.uncPaths[0]}</code>
+                                </p>
+                                <button
+                                    type="button"
+                                    className="auth-form__secondary-btn"
+                                    onClick={() =>
+                                        copyText(shareInfo.preferredUnc || shareInfo.uncPaths[0])
+                                    }
+                                >
+                                    Copy folder path
+                                </button>
+                                {copyNote && <p className="files-muted">{copyNote}</p>}
+                                {!shareInfo.enabled && shareInfo.message && (
+                                    <p className="error">{shareInfo.message}</p>
+                                )}
+                                <ol className="local-setup-join-steps">
+                                    {(shareInfo.joinSteps || []).map((step) => (
+                                        <li key={step}>{step}</li>
+                                    ))}
+                                </ol>
+                            </>
+                        ) : (
+                            <p className="files-muted">
+                                Detect the local server above to load the share path for this
+                                network. On the host, run the local server (as Administrator once
+                                if Windows blocks sharing).
+                            </p>
+                        )}
+                        <p className="files-muted">
+                            Phones: use the website with the LAN API address — they don’t get a
+                            Windows folder.
+                        </p>
+                    </div>
+                )}
 
                 <div className="message-area">
                     {status && <p className={isError ? "error" : "success"}>{status}</p>}
