@@ -1,8 +1,10 @@
 const fs = require("fs");
 const path = require("path");
 const File = require("../models/File");
+const User = require("../models/User");
 const { setupExplorerFolder } = require("./explorerFolder");
 const { markInternalWrite } = require("./explorerSync");
+const { softDeleteFile } = require("./softDeleteFile");
 
 const IGNORE_NAMES = new Set([
     "readme.txt",
@@ -45,7 +47,7 @@ function shouldSkipName(base) {
 }
 
 /**
- * Import disk files into Mongo for this owner, and drop DB rows whose
+ * Import disk files into Mongo for this owner, and soft-delete DB rows whose
  * Explorer files were deleted. Used by Refresh and the folder watcher.
  */
 async function reconcileExplorerFolder(ownerId) {
@@ -75,7 +77,11 @@ async function reconcileExplorerFolder(ownerId) {
     const ownerFiles = await File.find({
         owner: ownerId,
         storageKind: "disk",
+        deletedAt: null,
     });
+
+    const actor = await User.findById(ownerId).select("username");
+    const actorName = actor?.username || "Unknown";
 
     let removed = 0;
     for (const file of ownerFiles) {
@@ -91,7 +97,10 @@ async function reconcileExplorerFolder(ownerId) {
         }
 
         if (!diskPaths.has(stored) && !fs.existsSync(stored)) {
-            await file.deleteOne();
+            await softDeleteFile(file, {
+                userId: ownerId,
+                username: `${actorName} (folder)`,
+            });
             removed += 1;
         }
     }
@@ -99,6 +108,7 @@ async function reconcileExplorerFolder(ownerId) {
     let imported = 0;
     for (const diskFile of onDisk) {
         const existing = await File.findOne({
+            deletedAt: null,
             $or: [
                 { storagePath: diskFile.full },
                 {
@@ -117,6 +127,9 @@ async function reconcileExplorerFolder(ownerId) {
                 path.resolve(existing.storagePath) === diskFile.full
             ) {
                 existing.owner = ownerId;
+                if (!existing.uploadedByUsername) {
+                    existing.uploadedByUsername = actorName;
+                }
                 await existing.save();
             }
             continue;
@@ -127,6 +140,7 @@ async function reconcileExplorerFolder(ownerId) {
             filename: diskFile.name,
             storedFilename: diskFile.name,
             owner: ownerId,
+            uploadedByUsername: actorName,
             fileSize: diskFile.size,
             fileType: guessMime(diskFile.name),
             storageKind: "disk",

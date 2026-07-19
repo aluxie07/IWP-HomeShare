@@ -56,6 +56,7 @@ async function findFileForPath(filePath) {
     const name = path.basename(resolved);
 
     return File.findOne({
+        deletedAt: null,
         $or: [
             { storagePath: resolved },
             { storedFilename: name, storageKind: "disk" },
@@ -100,6 +101,7 @@ async function onFileAdded(filePath) {
         filename: basename,
         storedFilename: basename,
         owner: owner._id,
+        uploadedByUsername: owner.username,
         fileSize: stats.size,
         fileType: guessMime(basename),
         storageKind: "disk",
@@ -118,13 +120,20 @@ async function onFileRemoved(filePath) {
     }
 
     const existing = await findFileForPath(filePath);
-    if (!existing) {
+    if (!existing || existing.deletedAt) {
         return;
     }
 
-    await existing.deleteOne();
+    const { softDeleteFile } = require("./softDeleteFile");
+    const actor = await resolveSyncOwner();
+    await softDeleteFile(existing, {
+        userId: actor?._id || existing.owner,
+        username: actor
+            ? `${actor.username} (folder)`
+            : "Explorer (folder)",
+    });
     console.log(
-        `[HomeShare] Explorer → server: removed "${existing.filename}" (deleted from folder)`
+        `[HomeShare] Explorer → server: soft-deleted "${existing.filename}" (removed from folder)`
     );
 }
 

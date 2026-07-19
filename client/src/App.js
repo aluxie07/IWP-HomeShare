@@ -25,6 +25,11 @@ import {
 } from "./utils/authStorage";
 import { apiFetch } from "./utils/api";
 import {
+    useIdleTimeout,
+    touchSessionActivity,
+    clearSessionActivity,
+} from "./utils/idleTimeout";
+import {
     getVerifyTokenFromUrl,
     getResetTokenFromUrl,
     getShareTokenFromUrl,
@@ -136,11 +141,17 @@ function App() {
             // ignore
         }
         clearAuth();
+        clearSessionActivity();
         setIsLoggedIn(false);
         setPage("login");
     };
 
+    useIdleTimeout(isLoggedIn, () => {
+        redirectToLogin();
+    });
+
     const handleLoginSuccess = () => {
+        touchSessionActivity();
         setIsLoggedIn(true);
         const pendingShare = consumePendingShare();
         if (pendingShare) {

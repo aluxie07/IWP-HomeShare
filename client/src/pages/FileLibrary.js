@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import NetworkStatusIndicator from "../components/NetworkStatusIndicator";
 import ShareFileModal from "../components/ShareFileModal";
 import FileThumbnail from "../components/FileThumbnail";
@@ -15,10 +15,24 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState("");
+    const [selectedFileId, setSelectedFileId] = useState(null);
     const [shareFile, setShareFile] = useState(null);
     const [updatingModeId, setUpdatingModeId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
     const [syncNote, setSyncNote] = useState("");
+
+    const activeFiles = useMemo(
+        () => files.filter((file) => !file.deleted),
+        [files]
+    );
+    const deletedFiles = useMemo(
+        () => files.filter((file) => file.deleted),
+        [files]
+    );
+    const selectedFile = useMemo(
+        () => files.find((file) => file.id === selectedFileId) || null,
+        [files, selectedFileId]
+    );
 
     const loadFiles = useCallback(async () => {
         setLoading(true);
@@ -54,6 +68,21 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         loadFiles();
     }, [loadFiles]);
 
+    useEffect(() => {
+        if (!selectedFileId) {
+            return undefined;
+        }
+
+        const onKeyDown = (event) => {
+            if (event.key === "Escape" && !shareFile) {
+                setSelectedFileId(null);
+            }
+        };
+
+        document.addEventListener("keydown", onKeyDown);
+        return () => document.removeEventListener("keydown", onKeyDown);
+    }, [selectedFileId, shareFile]);
+
     const handleRefresh = async () => {
         setRefreshing(true);
         setError("");
@@ -85,7 +114,6 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                 return;
             }
 
-            // Fallback: list only (e.g. cloud API without sync route)
             const res = await fetch(`${getApiUrl()}/files`, {
                 credentials: "include",
                 headers: authHeaders(),
@@ -112,7 +140,11 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
     };
 
     const handleDelete = async (fileId, filename) => {
-        if (!window.confirm(`Delete "${filename}"? This also removes it from the HomeShare folder.`)) {
+        if (
+            !window.confirm(
+                `Delete "${filename}"? The file will be removed, but a log entry will stay in the library.`
+            )
+        ) {
             return;
         }
 
@@ -137,7 +169,8 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                 return;
             }
 
-            loadFiles();
+            setSelectedFileId(null);
+            await loadFiles();
         } catch {
             setError("Could not delete file");
         } finally {
@@ -167,7 +200,13 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                 return;
             }
 
-            loadFiles();
+            if (data.file) {
+                setFiles((prev) =>
+                    prev.map((file) => (file.id === fileId ? { ...file, ...data.file } : file))
+                );
+            } else {
+                await loadFiles();
+            }
         } catch {
             setError("Could not update access mode");
         } finally {
@@ -207,9 +246,15 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         }
     };
 
+    const closeDetail = () => {
+        if (!shareFile) {
+            setSelectedFileId(null);
+        }
+    };
+
     return (
-        <section className="dashboard-page">
-            <div className="dashboard-card files-page-card">
+        <section className="dashboard-page dashboard-page--wide">
+            <div className="dashboard-card files-page-card files-page-card--grid">
                 <div className="files-section-header">
                     <h2 className="auth-title">File library</h2>
                     <div className="files-section-header-actions">
@@ -227,9 +272,8 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                     </div>
                 </div>
                 <p className="files-page-intro">
-                    Assign Private, Shared, or Local Only access modes. In Local Network Mode,
-                    files also sync with your PC folder{" "}
-                    <code>HomeShare\Files</code>. Drop files there, then click Refresh.
+                    Click a file to change access, share, download, or delete. Deletion keeps a
+                    history entry with who uploaded and who removed it.
                 </p>
 
                 <NetworkStatusIndicator compact />
@@ -238,7 +282,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                 {error && <p className="error">{error}</p>}
                 {!error && syncNote && <p className="files-muted">{syncNote}</p>}
 
-                {!loading && !error && files.length === 0 && (
+                {!loading && !error && activeFiles.length === 0 && deletedFiles.length === 0 && (
                     <p className="files-muted">
                         You have not uploaded any files yet.{" "}
                         <button type="button" className="files-link-btn" onClick={onGoToUpload}>
@@ -247,54 +291,161 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                     </p>
                 )}
 
-                {!loading && files.length > 0 && (
-                    <ul className="file-list file-list--library">
-                        {files.map((file) => (
-                            <li key={file.id} className="file-list-item file-list-item--library">
+                {!loading && activeFiles.length > 0 && (
+                    <div className="file-grid" role="list">
+                        {activeFiles.map((file) => (
+                            <button
+                                key={file.id}
+                                type="button"
+                                role="listitem"
+                                className="file-grid-tile"
+                                onClick={() => setSelectedFileId(file.id)}
+                            >
                                 <FileThumbnail file={file} onAuthError={onRedirectToLogin} />
-                                <div className="file-list-details">
-                                    <span className="file-list-name">{file.filename}</span>
-                                    <span className="file-list-meta">
-                                        {file.fileType} · {formatFileSize(file.fileSize)} ·{" "}
-                                        {formatUploadDate(file.uploadDate)}
+                                <span className="file-grid-tile__name" title={file.filename}>
+                                    {file.filename}
+                                </span>
+                                <span className="file-grid-tile__meta">
+                                    {file.uploadedBy || "Unknown"}
+                                </span>
+                                {(file.accessMode === "local_only" || file.share) && (
+                                    <span className="file-grid-tile__badges">
+                                        {file.accessMode === "local_only" && (
+                                            <span className="file-list-access-badge file-list-access-badge--local">
+                                                Local
+                                            </span>
+                                        )}
+                                        {file.share && (
+                                            <span className="file-list-share-badge">Shared</span>
+                                        )}
                                     </span>
-                                    <label className="file-access-mode-inline">
-                                        <span className="file-access-mode-inline-label">Access:</span>
-                                        <select
-                                            className="file-access-mode-select file-access-mode-select--inline"
-                                            value={file.accessMode || "private"}
-                                            disabled={updatingModeId === file.id}
-                                            onChange={(e) =>
-                                                handleAccessModeChange(file.id, e.target.value)
-                                            }
-                                        >
-                                            {ACCESS_MODES.map((mode) => (
-                                                <option key={mode.value} value={mode.value}>
-                                                    {mode.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </label>
-                                    {file.accessMode === "local_only" && (
-                                        <span className="file-list-access-badge file-list-access-badge--local">
-                                            Local Only
-                                        </span>
-                                    )}
-                                    {file.share && (
-                                        <span className="file-list-share-badge">
-                                            Shared
-                                            {file.share.permission === "view" ? " (view only)" : ""}
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="file-list-actions">
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {!loading && deletedFiles.length > 0 && (
+                    <div className="file-deletion-log">
+                        <h3 className="files-section-title">Deletion log</h3>
+                        <p className="files-muted">
+                            Files removed from storage. Click an entry for details.
+                        </p>
+                        <div className="file-grid file-grid--deleted" role="list">
+                            {deletedFiles.map((file) => (
+                                <button
+                                    key={file.id}
+                                    type="button"
+                                    role="listitem"
+                                    className="file-grid-tile file-grid-tile--deleted"
+                                    onClick={() => setSelectedFileId(file.id)}
+                                >
+                                    <span className="file-grid-tile__name" title={file.filename}>
+                                        {file.filename}
+                                    </span>
+                                    <span className="file-grid-tile__meta">
+                                        Deleted by {file.deletedBy || "Unknown"}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {selectedFile && (
+                <div
+                    className="modal-overlay file-detail-overlay"
+                    onClick={closeDetail}
+                    role="presentation"
+                >
+                    <div
+                        className="modal-card file-detail-modal"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="file-detail-title"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="file-detail-modal__header">
+                            <h3 id="file-detail-title" className="modal-title">
+                                {selectedFile.filename}
+                            </h3>
+                            <button
+                                type="button"
+                                className="files-link-btn"
+                                onClick={() => setSelectedFileId(null)}
+                            >
+                                Close
+                            </button>
+                        </div>
+
+                        {!selectedFile.deleted && (
+                            <div className="file-detail-modal__preview">
+                                <FileThumbnail
+                                    file={selectedFile}
+                                    onAuthError={onRedirectToLogin}
+                                />
+                            </div>
+                        )}
+
+                        <div className="file-detail-modal__meta">
+                            {!selectedFile.deleted && (
+                                <p>
+                                    <span className="file-detail-label">Type / size</span>
+                                    {selectedFile.fileType} ·{" "}
+                                    {formatFileSize(selectedFile.fileSize)}
+                                </p>
+                            )}
+                            <p>
+                                <span className="file-detail-label">Uploaded by</span>
+                                {selectedFile.uploadedBy || "Unknown"} ·{" "}
+                                {formatUploadDate(selectedFile.uploadDate)}
+                            </p>
+                            {selectedFile.deleted && (
+                                <p>
+                                    <span className="file-detail-label">Deleted by</span>
+                                    {selectedFile.deletedBy || "Unknown"} ·{" "}
+                                    {formatUploadDate(selectedFile.deletedAt)}
+                                </p>
+                            )}
+                        </div>
+
+                        {selectedFile.deleted ? (
+                            <p className="files-muted">
+                                This file was removed from storage. The log entry is kept for
+                                history.
+                            </p>
+                        ) : (
+                            <>
+                                <label className="file-access-mode-inline file-detail-access">
+                                    <span className="file-access-mode-inline-label">Access mode</span>
+                                    <select
+                                        className="file-access-mode-select"
+                                        value={selectedFile.accessMode || "private"}
+                                        disabled={updatingModeId === selectedFile.id}
+                                        onChange={(e) =>
+                                            handleAccessModeChange(
+                                                selectedFile.id,
+                                                e.target.value
+                                            )
+                                        }
+                                    >
+                                        {ACCESS_MODES.map((mode) => (
+                                            <option key={mode.value} value={mode.value}>
+                                                {mode.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+
+                                <div className="file-list-actions file-detail-actions">
                                     <button
                                         type="button"
                                         className="file-share-btn"
-                                        onClick={() => setShareFile(file)}
-                                        disabled={!canShareFile(file)}
+                                        onClick={() => setShareFile(selectedFile)}
+                                        disabled={!canShareFile(selectedFile)}
                                         title={
-                                            canShareFile(file)
+                                            canShareFile(selectedFile)
                                                 ? "Create a share link"
                                                 : "Private files cannot be shared"
                                         }
@@ -304,30 +455,44 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                     <button
                                         type="button"
                                         className="file-download-btn"
-                                        onClick={() => handleDownload(file.id, file.filename)}
+                                        onClick={() =>
+                                            handleDownload(
+                                                selectedFile.id,
+                                                selectedFile.filename
+                                            )
+                                        }
                                     >
                                         Download
                                     </button>
                                     <button
                                         type="button"
                                         className="share-revoke-btn"
-                                        onClick={() => handleDelete(file.id, file.filename)}
-                                        disabled={deletingId === file.id}
+                                        onClick={() =>
+                                            handleDelete(
+                                                selectedFile.id,
+                                                selectedFile.filename
+                                            )
+                                        }
+                                        disabled={deletingId === selectedFile.id}
                                     >
-                                        {deletingId === file.id ? "Deleting…" : "Delete"}
+                                        {deletingId === selectedFile.id
+                                            ? "Deleting…"
+                                            : "Delete"}
                                     </button>
                                 </div>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {shareFile && (
                 <ShareFileModal
                     file={shareFile}
                     onClose={() => setShareFile(null)}
-                    onShareUpdated={loadFiles}
+                    onShareUpdated={async () => {
+                        await loadFiles();
+                    }}
                 />
             )}
         </section>

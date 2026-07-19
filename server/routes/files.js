@@ -12,7 +12,6 @@ const {
     streamFileToResponse,
     isForeignDiskPath,
     shouldUseDisk,
-    deleteStoredFile,
     getStorageMode,
     makeExplorerFilename,
 } = require("../utils/fileStorage");
@@ -27,7 +26,6 @@ const {
 } = require("../utils/uploadSessions");
 const {
     syncUploadToExplorer,
-    removeExplorerFile,
     markInternalWrite,
 } = require("../utils/explorerSync");
 const { reconcileExplorerFolder } = require("../utils/explorerReconcile");
@@ -44,11 +42,17 @@ const {
     assertFileNetworkAccess,
     ACCESS_MODES,
 } = require("../utils/fileAccess");
+const { softDeleteFile, isFileDeleted } = require("../utils/softDeleteFile");
 
 const router = express.Router();
 const CHUNK_BODY_LIMIT = DEFAULT_CHUNK_SIZE + 1024 * 1024;
 
 function formatFile(file) {
+    const ownerDoc = file.owner && typeof file.owner === "object" ? file.owner : null;
+    const deletedByDoc =
+        file.deletedBy && typeof file.deletedBy === "object" ? file.deletedBy : null;
+    const deleted = isFileDeleted(file);
+
     const payload = {
         id: file._id,
         filename: file.filename,
@@ -56,9 +60,19 @@ function formatFile(file) {
         fileSize: file.fileSize,
         fileType: file.fileType,
         accessMode: normalizeAccessMode(file.accessMode),
+        uploadedBy:
+            file.uploadedByUsername ||
+            ownerDoc?.username ||
+            null,
+        deleted: deleted,
+        deletedAt: file.deletedAt || null,
+        deletedBy:
+            file.deletedByUsername ||
+            deletedByDoc?.username ||
+            null,
     };
 
-    if (file.shareToken) {
+    if (!deleted && file.shareToken) {
         payload.share = {
             expiresAt: file.shareExpiresAt,
             maxDownloads: file.shareMaxDownloads,
@@ -68,6 +82,48 @@ function formatFile(file) {
     }
 
     return payload;
+}
+
+function libraryListQuery(userId) {
+    return {
+        $or: [
+            { owner: userId },
+            { accessMode: { $in: ["shared", "local_only"] } },
+        ],
+    };
+}
+
+function sortLibraryFiles(files) {
+    return [...files].sort((a, b) => {
+        const aDeleted = Boolean(a.deletedAt);
+        const bDeleted = Boolean(b.deletedAt);
+        if (aDeleted !== bDeleted) {
+            return aDeleted ? 1 : -1;
+        }
+        if (aDeleted) {
+            return new Date(b.deletedAt) - new Date(a.deletedAt);
+        }
+        return new Date(b.uploadDate) - new Date(a.uploadDate);
+    });
+}
+
+async function loadLibraryFiles(userId) {
+    const files = await File.find(libraryListQuery(userId))
+        .populate("owner", "username")
+        .populate("deletedBy", "username");
+    return sortLibraryFiles(files).map(formatFile);
+}
+
+function canDeleteFile(file, user) {
+    const ownerId = file.owner?._id || file.owner;
+    if (String(ownerId) === String(user.id)) {
+        return true;
+    }
+    if (user.role === "admin") {
+        return true;
+    }
+    const mode = normalizeAccessMode(file.accessMode);
+    return mode === "shared" || mode === "local_only";
 }
 
 router.post(
@@ -163,6 +219,7 @@ router.post(
                     ? path.basename(storagePath)
                     : storedFilename,
                 owner: req.user.id,
+                uploadedByUsername: req.user.username,
                 fileSize: req.file.size,
                 fileType: req.file.mimetype,
                 storageKind,
@@ -364,6 +421,7 @@ router.post("/files/upload/:uploadId/complete", authMiddleware, requireMongo, as
             filename: session.filename,
             storedFilename: storagePath ? path.basename(storagePath) : storedFilename,
             owner: req.user.id,
+            uploadedByUsername: req.user.username,
             fileSize: session.fileSize,
             fileType: session.fileType,
             storageKind,
@@ -401,10 +459,8 @@ router.delete("/files/upload/:uploadId", authMiddleware, (req, res) => {
 
 router.get("/files", authMiddleware, async (req, res) => {
     try {
-        const files = await File.find({ owner: req.user.id }).sort({ uploadDate: -1 });
-        res.status(200).json({
-            files: files.map(formatFile),
-        });
+        const files = await loadLibraryFiles(req.user.id);
+        res.status(200).json({ files });
     } catch {
         res.status(500).json({ message: "Could not load files" });
     }
@@ -422,9 +478,7 @@ router.post("/files/sync-folder", authMiddleware, requireMongo, async (req, res)
         }
 
         const result = await reconcileExplorerFolder(req.user.id);
-        const files = await File.find({ owner: req.user.id }).sort({
-            uploadDate: -1,
-        });
+        const files = await loadLibraryFiles(req.user.id);
 
         res.status(200).json({
             message:
@@ -432,7 +486,7 @@ router.post("/files/sync-folder", authMiddleware, requireMongo, async (req, res)
                     ? `Synced: ${result.imported} added, ${result.removed} removed`
                     : "Library is up to date with HomeShare\\Files",
             ...result,
-            files: files.map(formatFile),
+            files,
         });
     } catch (err) {
         console.error("[HomeShare] Folder sync failed:", err.message);
@@ -447,7 +501,7 @@ router.post("/files/:id/share", authMiddleware, async (req, res) => {
             owner: req.user.id,
         });
 
-        if (!file) {
+        if (!file || isFileDeleted(file)) {
             return res.status(404).json({ message: "File not found" });
         }
 
@@ -500,7 +554,7 @@ router.delete("/files/:id/share", authMiddleware, async (req, res) => {
             owner: req.user.id,
         });
 
-        if (!file) {
+        if (!file || isFileDeleted(file)) {
             return res.status(404).json({ message: "File not found" });
         }
 
@@ -537,7 +591,7 @@ router.patch("/files/:id/access-mode", authMiddleware, async (req, res) => {
             owner: req.user.id,
         });
 
-        if (!file) {
+        if (!file || isFileDeleted(file)) {
             return res.status(404).json({ message: "File not found" });
         }
 
@@ -569,20 +623,27 @@ router.patch("/files/:id/access-mode", authMiddleware, async (req, res) => {
 
 router.delete("/files/:id", authMiddleware, requireMongo, async (req, res) => {
     try {
-        const file = await File.findOne({
-            _id: req.params.id,
-            owner: req.user.id,
-        });
+        const file = await File.findById(req.params.id);
 
-        if (!file) {
+        if (!file || isFileDeleted(file)) {
             return res.status(404).json({ message: "File not found" });
         }
 
-        removeExplorerFile(file);
-        await deleteStoredFile(file);
-        await file.deleteOne();
+        if (!canDeleteFile(file, req.user)) {
+            return res.status(403).json({
+                message: "You can only delete your own private files, or Shared / Local Only files.",
+            });
+        }
 
-        res.status(200).json({ message: "File deleted" });
+        await softDeleteFile(file, {
+            userId: req.user.id,
+            username: req.user.username,
+        });
+
+        res.status(200).json({
+            message: "File deleted",
+            file: formatFile(file),
+        });
     } catch (err) {
         console.error("[HomeShare] Delete failed:", err.message);
         res.status(500).json({ message: "Could not delete file" });
@@ -596,7 +657,7 @@ router.get("/files/:id/download", authMiddleware, requireMongo, async (req, res)
             owner: req.user.id,
         });
 
-        if (!file) {
+        if (!file || isFileDeleted(file)) {
             return res.status(404).json({ message: "File not found" });
         }
 

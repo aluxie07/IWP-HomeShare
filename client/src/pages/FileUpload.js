@@ -260,18 +260,24 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
                         </button>
                     </div>
                     {loadingList && <p className="files-muted">Loading files…</p>}
-                    {!loadingList && files.length === 0 && (
+                    {!loadingList && files.filter((f) => !f.deleted).length === 0 && (
                         <p className="files-muted">No files uploaded yet.</p>
                     )}
-                    {!loadingList && files.length > 0 && (
+                    {!loadingList && files.some((f) => !f.deleted) && (
                         <ul className="file-list">
-                            {files.slice(0, 5).map((file) => (
+                            {files
+                                .filter((f) => !f.deleted)
+                                .slice(0, 5)
+                                .map((file) => (
                                 <li key={file.id} className="file-list-item">
                                     <span className="file-list-name">{file.filename}</span>
                                     <span className="file-list-meta">
                                         {getAccessModeLabel(file.accessMode)} ·{" "}
                                         {formatFileSize(file.fileSize)} ·{" "}
                                         {formatUploadDate(file.uploadDate)}
+                                        {file.uploadedBy
+                                            ? ` · by ${file.uploadedBy}`
+                                            : ""}
                                     </span>
                                 </li>
                             ))}
