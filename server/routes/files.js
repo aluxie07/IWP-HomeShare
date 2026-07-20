@@ -85,12 +85,27 @@ function formatFile(file) {
 }
 
 function libraryListQuery(userId) {
-    return {
-        $or: [
-            { owner: userId },
-            { accessMode: { $in: ["shared", "local_only"] } },
-        ],
-    };
+    // Cloud API: each account sees only its own library.
+    if (!shouldUseDisk()) {
+        return { owner: userId };
+    }
+    // Local disk server: everyone on this LAN instance shares one library.
+    return {};
+}
+
+function isFileOwner(file, userId) {
+    const ownerId = file.owner?._id || file.owner;
+    return String(ownerId) === String(userId);
+}
+
+function canAccessFileDownload(file, user, networkContext) {
+    if (isFileDeleted(file)) {
+        return { ok: false, status: 404, message: "File not found" };
+    }
+    if (!isFileOwner(file, user.id) && !shouldUseDisk()) {
+        return { ok: false, status: 404, message: "File not found" };
+    }
+    return assertFileNetworkAccess(file, networkContext);
 }
 
 function sortLibraryFiles(files) {
@@ -115,15 +130,18 @@ async function loadLibraryFiles(userId) {
 }
 
 function canDeleteFile(file, user) {
-    const ownerId = file.owner?._id || file.owner;
-    if (String(ownerId) === String(user.id)) {
+    if (isFileOwner(file, user.id)) {
         return true;
     }
     if (user.role === "admin") {
         return true;
     }
-    const mode = normalizeAccessMode(file.accessMode);
-    return mode === "shared" || mode === "local_only";
+    // On the local server, any logged-in user may remove shared LAN files.
+    if (shouldUseDisk()) {
+        const mode = normalizeAccessMode(file.accessMode);
+        return mode === "shared" || mode === "local_only";
+    }
+    return false;
 }
 
 router.post(
@@ -652,23 +670,20 @@ router.delete("/files/:id", authMiddleware, requireMongo, async (req, res) => {
 
 router.get("/files/:id/download", authMiddleware, requireMongo, async (req, res) => {
     try {
-        const file = await File.findOne({
-            _id: req.params.id,
-            owner: req.user.id,
-        });
+        const file = await File.findById(req.params.id);
 
-        if (!file || isFileDeleted(file)) {
+        if (!file) {
             return res.status(404).json({ message: "File not found" });
         }
 
-        const networkCheck = assertFileNetworkAccess(file, {
+        const access = canAccessFileDownload(file, req.user, {
             isTrustedNetwork: req.isTrustedNetwork,
             configured: req.trustedNetworkConfigured,
         });
-        if (!networkCheck.ok) {
-            return res.status(networkCheck.status).json({
-                message: networkCheck.message,
-                code: networkCheck.code,
+        if (!access.ok) {
+            return res.status(access.status).json({
+                message: access.message,
+                code: access.code,
             });
         }
 
