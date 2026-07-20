@@ -2,6 +2,7 @@ const path = require("path");
 const os = require("os");
 const { ensureDataDir } = require("./utils/appPaths");
 const { needsSetup, runSetupWizard } = require("./utils/setupWizard");
+const { normalizeMongoUri } = require("./utils/mongoUri");
 
 function getPackagedDataDir() {
     return path.join(process.env.APPDATA || os.homedir(), "HomeShare", "local-server");
@@ -29,6 +30,7 @@ async function main() {
     }
 
     require("dotenv").config({ path: envPath });
+    process.env.MONGO_URI = normalizeMongoUri(process.env.MONGO_URI);
 
     if (!process.env.MONGO_URI || process.env.MONGO_URI.includes("USER:PASSWORD")) {
         console.error("");
@@ -40,6 +42,7 @@ async function main() {
             process.exit(1);
         }
         require("dotenv").config({ path: envPath, override: true });
+        process.env.MONGO_URI = normalizeMongoUri(process.env.MONGO_URI);
     }
 
     if (

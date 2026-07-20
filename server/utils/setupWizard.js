@@ -4,6 +4,11 @@ const os = require("os");
 const crypto = require("crypto");
 const { spawnSync } = require("child_process");
 const readline = require("readline");
+const {
+    normalizeMongoUri,
+    quoteEnvValue,
+    readMongoUriFromEnvContents,
+} = require("./mongoUri");
 
 const DEFAULT_CLIENT_URL = "https://aluxie07.github.io/IWP-HomeShare";
 
@@ -20,7 +25,7 @@ function buildEnvFile({ mongoUri, adminEmail, jwtSecret }) {
         `CLIENT_URL=${DEFAULT_CLIENT_URL}`,
         `ALLOWED_ORIGINS=${DEFAULT_CLIENT_URL},http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080`,
         `JWT_SECRET=${jwtSecret}`,
-        `MONGO_URI=${mongoUri}`,
+        `MONGO_URI=${quoteEnvValue(normalizeMongoUri(mongoUri))}`,
         "",
     ];
 
@@ -53,8 +58,7 @@ function needsSetup(envPath) {
     if (contents.includes("change-this-to-a-long-random-string")) {
         return true;
     }
-    const mongoMatch = contents.match(/^MONGO_URI=(.*)$/m);
-    const mongo = (mongoMatch?.[1] || "").trim();
+    const mongo = readMongoUriFromEnvContents(contents);
     if (!mongo || mongo.includes("USER:PASSWORD")) {
         return true;
     }
@@ -252,9 +256,10 @@ async function runSetupWizard(envPath) {
         return false;
     }
 
+    const mongoUri = normalizeMongoUri(answers.mongoUri);
     const jwtSecret = crypto.randomBytes(32).toString("hex");
     const contents = buildEnvFile({
-        mongoUri: answers.mongoUri,
+        mongoUri,
         adminEmail: answers.adminEmail,
         jwtSecret,
     });
@@ -263,7 +268,7 @@ async function runSetupWizard(envPath) {
     fs.writeFileSync(envPath, contents, "utf8");
 
     const saved = fs.readFileSync(envPath, "utf8");
-    if (!saved.includes(answers.mongoUri)) {
+    if (!saved.includes(mongoUri)) {
         console.error(`  Could not write config to ${envPath}`);
         return false;
     }

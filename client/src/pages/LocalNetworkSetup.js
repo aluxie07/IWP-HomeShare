@@ -7,6 +7,7 @@ import {
     getStoredApiOverride,
     switchToCloudApi,
     testAndSetApiOverride,
+    buildApiFetchOptions,
 } from "../utils/apiDiscovery";
 
 const PUBLIC = process.env.PUBLIC_URL || "";
@@ -33,14 +34,7 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
         }
         try {
             const res = await fetch(`${String(baseUrl).replace(/\/$/, "")}/local/share-info`, {
-                mode: "cors",
-                cache: "no-store",
-                signal: AbortSignal.timeout(5000),
-                ...(typeof window !== "undefined" &&
-                window.location.protocol === "https:" &&
-                /127\.0\.0\.1|localhost/.test(baseUrl)
-                    ? { targetAddressSpace: "local" }
-                    : {}),
+                ...buildApiFetchOptions(baseUrl),
             });
             if (!res.ok) {
                 setShareInfo(null);
@@ -318,17 +312,35 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
 
                 <div className="local-setup-manual">
                     <h3 className="files-section-title">Other devices on the same Wi-Fi</h3>
+                    <p className="error">
+                        <strong>Detect does not work on phones or other PCs</strong> — it only
+                        checks <code>127.0.0.1</code> on the device you’re holding. Enter the{" "}
+                        <strong>host PC’s LAN address</strong> below instead.
+                    </p>
+                    {shareInfo?.apiUrls?.length > 0 && (
+                        <p className="files-muted">
+                            From the host server window, use one of these addresses on other
+                            devices:
+                            {shareInfo.apiUrls.map((url) => (
+                                <span key={url} className="local-setup-unc">
+                                    {" "}
+                                    <code>{url}</code>
+                                </span>
+                            ))}
+                        </p>
+                    )}
                     <p className="files-muted">
-                        Phones and tablets cannot use <code>127.0.0.1</code>. On the PC
-                        running the server, find your LAN IP (e.g.{" "}
-                        <code>192.168.1.100</code>) and enter it below on each device.
+                        On the PC running the server, check the console for{" "}
+                        <strong>Other devices on this Wi-Fi</strong> (e.g.{" "}
+                        <code>http://192.168.50.193:8080</code>). Run{" "}
+                        <code>ipconfig</code> if needed. Both devices must be on the same Wi‑Fi.
                     </p>
                     <form onSubmit={handleSaveManualUrl}>
                         <label className="share-modal-label">
                             Local server address
                             <input
                                 type="url"
-                                placeholder="http://192.168.1.100:8080"
+                                placeholder="http://192.168.50.193:8080"
                                 value={manualUrl}
                                 onChange={(e) => setManualUrl(e.target.value)}
                             />

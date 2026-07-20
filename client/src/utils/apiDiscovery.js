@@ -8,6 +8,7 @@ const LOCAL_CANDIDATES = [
     "http://localhost:8080",
 ];
 const PROBE_TIMEOUT_MS = 5000;
+const LAN_PROBE_TIMEOUT_MS = 15000;
 
 function readInitialOverride() {
     try {
@@ -83,11 +84,27 @@ function setActive(url, mode) {
     localStorage.setItem(STORAGE_MODE_KEY, mode);
 }
 
+function isPrivateLanHost(hostname) {
+    return /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(hostname || "");
+}
+
+function probeTimeoutMs(baseUrl) {
+    try {
+        const host = new URL(baseUrl).hostname;
+        if (isLoopbackUrl(baseUrl) || isPrivateLanHost(host)) {
+            return LAN_PROBE_TIMEOUT_MS;
+        }
+    } catch {
+        // ignore
+    }
+    return PROBE_TIMEOUT_MS;
+}
+
 function buildProbeOptions(baseUrl, { useAddressSpace = true } = {}) {
     const options = {
         mode: "cors",
         cache: "no-store",
-        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+        signal: AbortSignal.timeout(probeTimeoutMs(baseUrl)),
     };
 
     if (!useAddressSpace || !isHttpsPage()) {
@@ -101,7 +118,36 @@ function buildProbeOptions(baseUrl, { useAddressSpace = true } = {}) {
 
     try {
         const host = new URL(baseUrl).hostname;
-        if (/^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(host)) {
+        if (isPrivateLanHost(host)) {
+            options.targetAddressSpace = "private";
+        }
+    } catch {
+        // ignore
+    }
+
+    return options;
+}
+
+/** Shared fetch options for LAN/local API calls from HTTPS GitHub Pages */
+export function buildApiFetchOptions(baseUrl, timeoutMs = probeTimeoutMs(baseUrl)) {
+    const options = {
+        mode: "cors",
+        cache: "no-store",
+        signal: AbortSignal.timeout(timeoutMs),
+    };
+
+    if (!isHttpsPage()) {
+        return options;
+    }
+
+    if (isLoopbackUrl(baseUrl)) {
+        options.targetAddressSpace = "local";
+        return options;
+    }
+
+    try {
+        const host = new URL(baseUrl).hostname;
+        if (isPrivateLanHost(host)) {
             options.targetAddressSpace = "private";
         }
     } catch {
@@ -147,7 +193,12 @@ export async function probeApiDetailed(baseUrl) {
                 lastError =
                     "browser blocked or could not reach the server (check Local network access permission, or try on the same PC as the server)";
             } else if (/aborted|timeout/i.test(msg)) {
-                lastError = "timed out waiting for the local server";
+                if (isLoopbackUrl(normalized)) {
+                    lastError = "timed out waiting for the local server";
+                } else {
+                    lastError =
+                        "timed out — use the host PC's LAN IP (http://192.168.x.x:8080), not 127.0.0.1. On the host, allow port 8080 in Windows Firewall and click Allow if the browser asks for local network access.";
+                }
             } else {
                 lastError = msg;
             }
@@ -220,9 +271,7 @@ export async function initApiDiscovery() {
     return { url: fallbackUrl, mode: fallbackMode, connected: false };
 }
 
-/**
- * Explicit Detect on Local Network setup — probes localhost even from GitHub Pages.
- */
+/** Explicit Detect — only works on the PC running the server (probes 127.0.0.1). */
 export async function detectLocalServer() {
     const errors = [];
     const seen = new Set();

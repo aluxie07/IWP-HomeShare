@@ -3,6 +3,14 @@ if (!process.env.HOMESHARE_DATA_DIR) {
     require("dotenv").config({ path: require("path").join(__dirname, ".env.shards") });
 }
 
+const {
+    normalizeMongoUri,
+    describeMongoUri,
+    maskMongoUri,
+    logAtlasNetworkHints,
+} = require("./utils/mongoUri");
+process.env.MONGO_URI = normalizeMongoUri(process.env.MONGO_URI);
+
 // Local disk mode: create HomeShare Explorer folder BEFORE loading upload routes
 if ((process.env.FILE_STORAGE || "").trim().toLowerCase() === "disk") {
     try {
@@ -138,14 +146,35 @@ app.use(fileRoutes);
 app.use(shareRoutes);
 app.use(networkRoutes);
 
-mongoose
-    .connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000 })
-    .then(() => console.log("MongoDB Connected"))
-    .catch((err) => {
-        console.error("MongoDB connection failed:", err.message);
+const mongoUri = normalizeMongoUri(process.env.MONGO_URI);
+const mongoInfo = describeMongoUri(mongoUri);
+
+if (!mongoInfo.valid) {
+    console.error("MongoDB: invalid MONGO_URI.");
+    mongoInfo.warnings.forEach((w) => console.error(`  - ${w}`));
+    if (process.env.HOMESHARE_DATA_DIR) {
         console.error(
-            "Atlas tips: Network Access → add your current public IP (or 0.0.0.0/0 for dev only), " +
-                "confirm the cluster is not paused, and verify MONGO_URI user/password."
+            `  Edit or delete: ${require("path").join(process.env.HOMESHARE_DATA_DIR, ".env")} then run Start HomeShare.bat again.`
+        );
+    }
+} else {
+    console.log(`MongoDB: connecting to ${maskMongoUri(mongoUri)}`);
+    mongoInfo.warnings.forEach((w) => console.warn(`MongoDB warning: ${w}`));
+}
+
+mongoose
+    .connect(mongoUri, { serverSelectionTimeoutMS: 15000 })
+    .then(() => console.log("MongoDB Connected"))
+    .catch(async (err) => {
+        console.error("MongoDB connection failed:", err.message);
+        console.error(`  Configured URI: ${maskMongoUri(mongoUri)}`);
+        mongoInfo.warnings.forEach((w) => console.error(`  - ${w}`));
+        await logAtlasNetworkHints();
+        console.error(
+            "  If the URI is wrong, delete .env and re-run Start HomeShare.bat, or edit:" +
+                (process.env.HOMESHARE_DATA_DIR
+                    ? ` ${require("path").join(process.env.HOMESHARE_DATA_DIR, ".env")}`
+                    : " server/.env")
         );
     });
 
@@ -202,9 +231,29 @@ app.get("/health/email", (req, res) => {
 });
 
 const PORT = process.env.PORT || 8080;
+const HOST = process.env.HOST || "0.0.0.0";
 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+app.listen(PORT, HOST, () => {
+    console.log(`Server running on http://${HOST === "0.0.0.0" ? "127.0.0.1" : HOST}:${PORT}`);
+    if (shouldUseDisk()) {
+        const { listLanIpv4 } = require("./utils/folderShare");
+        const { ensureWindowsFirewallRule } = require("./utils/windowsFirewall");
+        const lanIps = listLanIpv4();
+        if (lanIps.length > 0) {
+            console.log("Other devices on this Wi-Fi — connect the website to:");
+            lanIps.forEach((ip) => console.log(`  http://${ip}:${PORT}`));
+        } else {
+            console.log(
+                `Other devices: find this PC's LAN IP (ipconfig) and use http://YOUR-IP:${PORT}`
+            );
+        }
+        const fw = ensureWindowsFirewallRule(PORT);
+        if (fw.created) {
+            console.log(`Windows Firewall: opened inbound TCP ${PORT} for LAN access.`);
+        } else if (fw.ok === false) {
+            console.warn(`Windows Firewall: ${fw.message}`);
+        }
+    }
     console.log(`Email: provider = ${getEmailProvider()}`);
     const storageMode = getStorageMode();
     const storageLabel =
