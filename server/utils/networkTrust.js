@@ -124,32 +124,53 @@ function maskClientIp(ip) {
     return parts.join(".");
 }
 
-async function getTrustedNetworkConfig() {
-    return TrustedNetwork.findOne().sort({ updatedAt: -1 });
+async function findNetworkForIp(ip) {
+    if (!isIpv4(ip)) {
+        return null;
+    }
+
+    const networks = await TrustedNetwork.find({}).sort({ updatedAt: -1 });
+    for (const config of networks) {
+        if (isIpInCidr(ip, config.subnet)) {
+            return config;
+        }
+        if (config.registeredFromIp && ip === config.registeredFromIp) {
+            return config;
+        }
+    }
+    return null;
+}
+
+async function findNetworkBySubnet(subnet) {
+    const normalized = String(subnet || "").trim();
+    if (!normalized) {
+        return null;
+    }
+    return TrustedNetwork.findOne({ subnet: normalized });
 }
 
 async function isIpOnTrustedNetwork(ip) {
-    const config = await getTrustedNetworkConfig();
-    if (!config) {
-        return { trusted: false, configured: false, config: null };
-    }
-
-    if (isIpv4(ip) && isIpInCidr(ip, config.subnet)) {
+    const config = await findNetworkForIp(ip);
+    if (config) {
         return { trusted: true, configured: true, config };
     }
 
-    if (config.registeredFromIp && ip === config.registeredFromIp) {
-        return { trusted: true, configured: true, config };
-    }
-
-    return { trusted: false, configured: true, config };
+    const anyConfigured = (await TrustedNetwork.countDocuments({})) > 0;
+    return { trusted: false, configured: anyConfigured, config: null };
 }
 
 function getAccessLevel({ configured, trusted }) {
-    if (!configured) {
-        return "unconfigured";
+    if (!trusted) {
+        return configured ? "restricted" : "unconfigured";
     }
-    return trusted ? "trusted" : "restricted";
+    return "trusted";
+}
+
+function isNetworkAdmin(config, userId) {
+    if (!config || !userId) {
+        return false;
+    }
+    return String(config.registeredBy) === String(userId);
 }
 
 module.exports = {
@@ -159,7 +180,9 @@ module.exports = {
     isPrivateIpv4,
     subnetFromIp,
     maskClientIp,
-    getTrustedNetworkConfig,
+    findNetworkForIp,
+    findNetworkBySubnet,
     isIpOnTrustedNetwork,
     getAccessLevel,
+    isNetworkAdmin,
 };

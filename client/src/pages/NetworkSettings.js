@@ -25,12 +25,6 @@ function NetworkSettings({ onRedirectToLogin, onBack }) {
                 return;
             }
 
-            if (res.status === 403) {
-                setStatus("Administrator access is required to manage network settings.");
-                setIsError(true);
-                return;
-            }
-
             const data = await res.json();
             setConfig(data);
 
@@ -52,6 +46,9 @@ function NetworkSettings({ onRedirectToLogin, onBack }) {
     useEffect(() => {
         loadConfig();
     }, [loadConfig]);
+
+    const isAdmin = Boolean(config?.isNetworkAdmin);
+    const canRegister = Boolean(config?.canRegister);
 
     const handleRegister = async () => {
         setSubmitting(true);
@@ -99,6 +96,10 @@ function NetworkSettings({ onRedirectToLogin, onBack }) {
 
     const handleSave = async (e) => {
         e.preventDefault();
+        if (!isAdmin) {
+            return;
+        }
+
         setSubmitting(true);
         setStatus("");
         setIsError(false);
@@ -111,7 +112,7 @@ function NetworkSettings({ onRedirectToLogin, onBack }) {
                     ...authHeaders(),
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ label, subnet, gatewayIp }),
+                body: JSON.stringify({ label, gatewayIp }),
             });
 
             const data = await res.json();
@@ -134,7 +135,14 @@ function NetworkSettings({ onRedirectToLogin, onBack }) {
     };
 
     const handleReset = async () => {
-        if (!window.confirm("Reset trusted network configuration? Local Only files will be blocked until you register again.")) {
+        if (!isAdmin) {
+            return;
+        }
+        if (
+            !window.confirm(
+                "Remove this network registration? Others on this Wi-Fi will no longer share a library until someone registers again."
+            )
+        ) {
             return;
         }
 
@@ -174,15 +182,16 @@ function NetworkSettings({ onRedirectToLogin, onBack }) {
         <section className="dashboard-page dashboard-page--wide">
             <div className="dashboard-card network-settings-card">
                 <div className="network-settings-header">
-                    <h2 className="auth-title">Trusted network settings</h2>
+                    <h2 className="auth-title">Network settings</h2>
                     <button type="button" className="files-link-btn" onClick={onBack}>
                         Back to dashboard
                     </button>
                 </div>
 
                 <p className="files-page-intro network-settings-intro">
-                    Register your home or office Wi-Fi as the trusted network. Files marked
-                    Local Only are only downloadable when users connect from this subnet.
+                    The first person to register your Wi-Fi becomes the <strong>network admin</strong>.
+                    Others on that network can see shared files uploaded here, but only the admin can
+                    change these settings. A different Wi-Fi (different subnet) gets its own registration.
                 </p>
 
                 <NetworkStatusIndicator compact />
@@ -199,52 +208,60 @@ function NetworkSettings({ onRedirectToLogin, onBack }) {
                                         {" "}
                                         —{" "}
                                         {config.isCurrentClientTrusted
-                                            ? "on trusted network"
-                                            : "outside trusted network"}
+                                            ? "on registered network"
+                                            : "not on a registered network"}
                                     </>
                                 )}
                             </p>
                         )}
 
-                        <form
-                            className="network-settings-form"
-                            onSubmit={
-                                config?.configured
-                                    ? handleSave
-                                    : (e) => e.preventDefault()
-                            }
-                        >
-                            <label className="share-modal-label">
-                                Network label
-                                <input
-                                    type="text"
-                                    value={label}
-                                    onChange={(e) => setLabel(e.target.value)}
-                                    placeholder="Home Wi-Fi"
-                                />
-                            </label>
-                            <label className="share-modal-label">
-                                Subnet (CIDR)
-                                <input
-                                    type="text"
-                                    value={subnet}
-                                    onChange={(e) => setSubnet(e.target.value)}
-                                    placeholder="192.168.1.0/24"
-                                    required={Boolean(config?.configured)}
-                                />
-                            </label>
-                            <label className="share-modal-label">
-                                Gateway IP (optional)
-                                <input
-                                    type="text"
-                                    value={gatewayIp}
-                                    onChange={(e) => setGatewayIp(e.target.value)}
-                                    placeholder="192.168.1.1"
-                                />
-                            </label>
+                        {config?.configured && config.networkAdminUsername && (
+                            <p className="files-muted">
+                                Network admin: <strong>{config.networkAdminUsername}</strong>
+                                {isAdmin ? " (you)" : ""}
+                            </p>
+                        )}
 
-                            <div className="network-settings-actions">
-                                {!config?.configured ? (
+                        {config?.subnetAlreadyRegistered && !config?.configured && (
+                            <p className="files-muted">
+                                This Wi-Fi is already registered. Ask the network admin if you need
+                                changes — you can still use shared files when connected here.
+                            </p>
+                        )}
+
+                        {!config?.configured && canRegister && (
+                            <form
+                                className="network-settings-form"
+                                onSubmit={(e) => e.preventDefault()}
+                            >
+                                <label className="share-modal-label">
+                                    Network label
+                                    <input
+                                        type="text"
+                                        value={label}
+                                        onChange={(e) => setLabel(e.target.value)}
+                                        placeholder="Home Wi-Fi"
+                                    />
+                                </label>
+                                <label className="share-modal-label">
+                                    Subnet (CIDR)
+                                    <input
+                                        type="text"
+                                        value={subnet}
+                                        onChange={(e) => setSubnet(e.target.value)}
+                                        placeholder="192.168.1.0/24"
+                                    />
+                                </label>
+                                <label className="share-modal-label">
+                                    Gateway IP (optional)
+                                    <input
+                                        type="text"
+                                        value={gatewayIp}
+                                        onChange={(e) => setGatewayIp(e.target.value)}
+                                        placeholder="192.168.1.1"
+                                    />
+                                </label>
+                                <div className="network-settings-actions">
                                     <button
                                         type="button"
                                         className="logout-btn"
@@ -253,10 +270,46 @@ function NetworkSettings({ onRedirectToLogin, onBack }) {
                                     >
                                         {submitting
                                             ? "Registering…"
-                                            : "Register current network"}
+                                            : "Register this network (become admin)"}
                                     </button>
-                                ) : (
-                                    <>
+                                </div>
+                            </form>
+                        )}
+
+                        {config?.configured && (
+                            <form className="network-settings-form" onSubmit={handleSave}>
+                                <label className="share-modal-label">
+                                    Network label
+                                    <input
+                                        type="text"
+                                        value={label}
+                                        onChange={(e) => setLabel(e.target.value)}
+                                        placeholder="Home Wi-Fi"
+                                        disabled={!isAdmin}
+                                    />
+                                </label>
+                                <label className="share-modal-label">
+                                    Subnet (CIDR)
+                                    <input
+                                        type="text"
+                                        value={subnet}
+                                        readOnly
+                                        disabled
+                                    />
+                                </label>
+                                <label className="share-modal-label">
+                                    Gateway IP (optional)
+                                    <input
+                                        type="text"
+                                        value={gatewayIp}
+                                        onChange={(e) => setGatewayIp(e.target.value)}
+                                        placeholder="192.168.1.1"
+                                        disabled={!isAdmin}
+                                    />
+                                </label>
+
+                                {isAdmin ? (
+                                    <div className="network-settings-actions">
                                         <button
                                             type="submit"
                                             className="logout-btn"
@@ -266,24 +319,21 @@ function NetworkSettings({ onRedirectToLogin, onBack }) {
                                         </button>
                                         <button
                                             type="button"
-                                            className="auth-form__secondary-btn"
-                                            onClick={handleRegister}
-                                            disabled={submitting}
-                                        >
-                                            Re-register from this device
-                                        </button>
-                                        <button
-                                            type="button"
                                             className="share-revoke-btn"
                                             onClick={handleReset}
                                             disabled={submitting}
                                         >
-                                            Reset configuration
+                                            Remove network registration
                                         </button>
-                                    </>
+                                    </div>
+                                ) : (
+                                    <p className="files-muted">
+                                        Only {config.networkAdminUsername || "the network admin"}{" "}
+                                        can edit or remove this network&apos;s settings.
+                                    </p>
                                 )}
-                            </div>
-                        </form>
+                            </form>
+                        )}
 
                         {config?.configured && config.registeredAt && (
                             <p className="files-muted network-settings-meta">

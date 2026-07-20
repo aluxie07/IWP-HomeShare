@@ -123,13 +123,13 @@ function Dashboard({
                         File library
                     </button>
                 </div>
-                {user?.role === "admin" && (
+                {onGoToNetworkSettings && (
                     <button
                         type="button"
                         className="auth-form__secondary-btn dashboard-network-settings-btn"
                         onClick={onGoToNetworkSettings}
                     >
-                        Manage trusted network
+                        Network settings
                     </button>
                 )}
                 <div className="dashboard-actions">

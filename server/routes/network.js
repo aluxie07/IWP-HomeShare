@@ -1,36 +1,49 @@
 const express = require("express");
 const TrustedNetwork = require("../models/TrustedNetwork");
+const User = require("../models/User");
 const authMiddleware = require("../middleware/authMiddleware");
-const requireAdmin = require("../middleware/requireAdmin");
+const requireNetworkAdmin = require("../middleware/requireNetworkAdmin");
 const {
     subnetFromIp,
     isIpv4,
     isPrivateIpv4,
     maskClientIp,
+    findNetworkBySubnet,
+    isNetworkAdmin,
 } = require("../utils/networkTrust");
 
 const router = express.Router();
 
 function formatNetworkStatus(req) {
     const config = req.trustedNetworkConfig;
+    const suggestedSubnet = isIpv4(req.clientIp) ? subnetFromIp(req.clientIp) : null;
 
     return {
-        configured: req.trustedNetworkConfigured,
+        configured: Boolean(config),
         isTrustedNetwork: req.isTrustedNetwork,
         accessLevel: req.networkAccessLevel,
         clientIp: req.maskedClientIp,
+        suggestedSubnet,
+        isNetworkAdmin: Boolean(req.isNetworkAdmin),
+        canRegister:
+            !config &&
+            Boolean(suggestedSubnet) &&
+            isPrivateIpv4(req.clientIp),
         trustedNetwork: config
             ? {
+                  id: config._id,
                   label: config.label,
                   subnet: config.subnet,
                   gatewayIp: config.gatewayIp || null,
                   registeredAt: config.registeredAt,
+                  adminUserId: config.registeredBy,
               }
             : null,
         capabilities: {
-            localOnlyAccess: req.trustedNetworkConfigured && req.isTrustedNetwork,
+            localOnlyAccess: req.isTrustedNetwork,
             sharedAccess: true,
             privateAccess: true,
+            networkLibrary: req.isTrustedNetwork,
         },
     };
 }
@@ -39,19 +52,28 @@ router.get("/network/status", authMiddleware, (req, res) => {
     res.status(200).json(formatNetworkStatus(req));
 });
 
-router.get("/admin/network", authMiddleware, requireAdmin, async (req, res) => {
+/** Settings for the network matching this device's current IP/subnet */
+router.get("/admin/network", authMiddleware, async (req, res) => {
     try {
-        const config = await TrustedNetwork.findOne().sort({ updatedAt: -1 });
+        const suggestedSubnet = isIpv4(req.clientIp) ? subnetFromIp(req.clientIp) : null;
+        const config = req.trustedNetworkConfig;
 
         if (!config) {
+            let subnetTaken = false;
+            if (suggestedSubnet) {
+                subnetTaken = Boolean(await findNetworkBySubnet(suggestedSubnet));
+            }
             return res.status(200).json({
                 configured: false,
                 currentClientIp: req.maskedClientIp,
-                suggestedSubnet: isIpv4(req.clientIp)
-                    ? subnetFromIp(req.clientIp)
-                    : null,
+                suggestedSubnet,
+                subnetAlreadyRegistered: subnetTaken,
+                canRegister: Boolean(suggestedSubnet) && isPrivateIpv4(req.clientIp) && !subnetTaken,
+                isNetworkAdmin: false,
             });
         }
+
+        const admin = await User.findById(config.registeredBy).select("username");
 
         res.status(200).json({
             configured: true,
@@ -63,13 +85,16 @@ router.get("/admin/network", authMiddleware, requireAdmin, async (req, res) => {
             updatedAt: config.updatedAt,
             currentClientIp: req.maskedClientIp,
             isCurrentClientTrusted: req.isTrustedNetwork,
+            isNetworkAdmin: isNetworkAdmin(config, req.user.id) || req.user.role === "admin",
+            networkAdminUsername: admin?.username || null,
         });
     } catch {
-        res.status(500).json({ message: "Could not load trusted network settings" });
+        res.status(500).json({ message: "Could not load network settings" });
     }
 });
 
-router.post("/admin/network/register", authMiddleware, requireAdmin, async (req, res) => {
+/** First user on this subnet becomes network admin; later users cannot re-register */
+router.post("/admin/network/register", authMiddleware, async (req, res) => {
     try {
         const clientIp = req.clientIp;
 
@@ -80,6 +105,13 @@ router.post("/admin/network/register", authMiddleware, requireAdmin, async (req,
             });
         }
 
+        if (!isPrivateIpv4(clientIp)) {
+            return res.status(400).json({
+                message:
+                    "Register a network from a private LAN address (e.g. home or office Wi-Fi), not from the public internet.",
+            });
+        }
+
         const { label, gatewayIp, subnet: customSubnet } = req.body || {};
         const subnet = customSubnet?.trim() || subnetFromIp(clientIp);
 
@@ -87,7 +119,22 @@ router.post("/admin/network/register", authMiddleware, requireAdmin, async (req,
             return res.status(400).json({ message: "Could not derive a subnet from your IP address" });
         }
 
-        await TrustedNetwork.deleteMany({});
+        const existing = await findNetworkBySubnet(subnet);
+        if (existing) {
+            const admin = await User.findById(existing.registeredBy).select("username");
+            return res.status(409).json({
+                message: admin?.username
+                    ? `This network is already registered. ${admin.username} is the network admin — ask them if settings need to change.`
+                    : "This network is already registered. Only the original network admin can change settings.",
+                code: "NETWORK_ALREADY_REGISTERED",
+            });
+        }
+
+        if (req.trustedNetworkConfig) {
+            return res.status(400).json({
+                message: "You are already on a registered network.",
+            });
+        }
 
         const config = await TrustedNetwork.create({
             label: label?.trim() || "Trusted network",
@@ -100,9 +147,8 @@ router.post("/admin/network/register", authMiddleware, requireAdmin, async (req,
         });
 
         res.status(201).json({
-            message: isPrivateIpv4(clientIp)
-                ? "Trusted network registered from your current local connection."
-                : "Trusted network registered. Note: your current IP does not look like a private LAN address — verify the subnet is correct.",
+            message:
+                "You registered this network and are its admin. Others on this Wi-Fi can see shared files here; only you can change network settings.",
             config: {
                 label: config.label,
                 subnet: config.subnet,
@@ -110,33 +156,30 @@ router.post("/admin/network/register", authMiddleware, requireAdmin, async (req,
                 registeredFromIp: maskClientIp(config.registeredFromIp),
                 registeredAt: config.registeredAt,
             },
+            isNetworkAdmin: true,
         });
-    } catch {
+    } catch (err) {
+        if (err.code === 11000) {
+            return res.status(409).json({
+                message: "This network subnet is already registered.",
+                code: "NETWORK_ALREADY_REGISTERED",
+            });
+        }
         res.status(500).json({ message: "Could not register trusted network" });
     }
 });
 
-router.put("/admin/network", authMiddleware, requireAdmin, async (req, res) => {
+router.put("/admin/network", authMiddleware, requireNetworkAdmin, async (req, res) => {
     try {
-        const config = await TrustedNetwork.findOne().sort({ updatedAt: -1 });
+        const config = req.trustedNetworkConfig;
 
         if (!config) {
             return res.status(404).json({
-                message: "No trusted network configured. Register the current network first.",
+                message: "No network registered for your current connection. Register it first.",
             });
         }
 
-        const { label, subnet, gatewayIp } = req.body || {};
-
-        if (subnet != null) {
-            const trimmed = String(subnet).trim();
-            if (!trimmed.includes("/")) {
-                return res.status(400).json({
-                    message: "Subnet must be in CIDR format, e.g. 192.168.1.0/24",
-                });
-            }
-            config.subnet = trimmed;
-        }
+        const { label, gatewayIp } = req.body || {};
 
         if (label != null) {
             config.label = String(label).trim() || config.label;
@@ -150,7 +193,7 @@ router.put("/admin/network", authMiddleware, requireAdmin, async (req, res) => {
         await config.save();
 
         res.status(200).json({
-            message: "Trusted network settings updated",
+            message: "Network settings updated",
             config: {
                 label: config.label,
                 subnet: config.subnet,
@@ -163,11 +206,21 @@ router.put("/admin/network", authMiddleware, requireAdmin, async (req, res) => {
     }
 });
 
-router.delete("/admin/network", authMiddleware, requireAdmin, async (req, res) => {
+router.delete("/admin/network", authMiddleware, requireNetworkAdmin, async (req, res) => {
     try {
-        await TrustedNetwork.deleteMany({});
+        const config = req.trustedNetworkConfig;
+
+        if (!config) {
+            return res.status(404).json({
+                message: "No network registered for your current connection.",
+            });
+        }
+
+        await TrustedNetwork.deleteOne({ _id: config._id });
+
         res.status(200).json({
-            message: "Trusted network configuration reset. Local Only restrictions are disabled until a network is registered again.",
+            message:
+                "Network registration removed. Local Only files on this subnet are blocked until someone registers again.",
         });
     } catch {
         res.status(500).json({ message: "Could not reset trusted network settings" });

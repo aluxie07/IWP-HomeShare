@@ -215,13 +215,9 @@ function App() {
                         setPage("login");
                         return;
                     }
-                    if (!isAdmin()) {
-                        setPage("dashboard");
-                        return;
-                    }
                     setPage("network-settings");
                 }}
-                showSettings={isLoggedIn && isAdmin()}
+                showSettings={isLoggedIn}
                 onGetStarted={() => setPage("register")}
                 showGetStarted={!isLoggedIn}
             />

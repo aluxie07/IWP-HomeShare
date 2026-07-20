@@ -50,7 +50,7 @@ function shouldSkipName(base) {
  * Import disk files into Mongo for this owner, and soft-delete DB rows whose
  * Explorer files were deleted. Used by Refresh and the folder watcher.
  */
-async function reconcileExplorerFolder(ownerId) {
+async function reconcileExplorerFolder(ownerId, networkId = null) {
     if ((process.env.FILE_STORAGE || "").trim().toLowerCase() !== "disk") {
         return { imported: 0, removed: 0, skipped: true };
     }
@@ -146,6 +146,7 @@ async function reconcileExplorerFolder(ownerId) {
             storageKind: "disk",
             storagePath: diskFile.full,
             accessMode: "private",
+            ...(networkId ? { networkId } : {}),
         });
         imported += 1;
     }

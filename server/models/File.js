@@ -58,6 +58,8 @@ const fileSchema = new mongoose.Schema({
         enum: ["private", "shared", "local_only"],
         default: "private",
     },
+    /** When set, file is visible to all users on this registered network (subnet) */
+    networkId: { type: mongoose.Schema.Types.ObjectId, ref: "TrustedNetwork" },
     /** Soft-delete: bytes removed, metadata kept for the library audit log */
     deletedAt: { type: Date },
     deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

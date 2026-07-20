@@ -84,13 +84,13 @@ function formatFile(file) {
     return payload;
 }
 
-function libraryListQuery(userId) {
-    // Cloud API: each account sees only its own library.
-    if (!shouldUseDisk()) {
-        return { owner: userId };
+function libraryListQuery(userId, networkId) {
+    if (networkId) {
+        return {
+            $or: [{ owner: userId }, { networkId }],
+        };
     }
-    // Local disk server: everyone on this LAN instance shares one library.
-    return {};
+    return { owner: userId };
 }
 
 function isFileOwner(file, userId) {
@@ -98,11 +98,19 @@ function isFileOwner(file, userId) {
     return String(ownerId) === String(userId);
 }
 
+function isSameNetwork(file, networkId) {
+    if (!networkId || !file.networkId) {
+        return false;
+    }
+    return String(file.networkId) === String(networkId);
+}
+
 function canAccessFileDownload(file, user, networkContext) {
     if (isFileDeleted(file)) {
         return { ok: false, status: 404, message: "File not found" };
     }
-    if (!isFileOwner(file, user.id) && !shouldUseDisk()) {
+    const networkId = networkContext?.networkId || null;
+    if (!isFileOwner(file, user.id) && !isSameNetwork(file, networkId)) {
         return { ok: false, status: 404, message: "File not found" };
     }
     return assertFileNetworkAccess(file, networkContext);
@@ -122,22 +130,25 @@ function sortLibraryFiles(files) {
     });
 }
 
-async function loadLibraryFiles(userId) {
-    const files = await File.find(libraryListQuery(userId))
+async function loadLibraryFiles(userId, networkId) {
+    const files = await File.find(libraryListQuery(userId, networkId))
         .populate("owner", "username")
         .populate("deletedBy", "username");
     return sortLibraryFiles(files).map(formatFile);
 }
 
-function canDeleteFile(file, user) {
+function currentNetworkId(req) {
+    return req.currentNetworkId || null;
+}
+
+function canDeleteFile(file, user, networkId) {
     if (isFileOwner(file, user.id)) {
         return true;
     }
     if (user.role === "admin") {
         return true;
     }
-    // On the local server, any logged-in user may remove shared LAN files.
-    if (shouldUseDisk()) {
+    if (isSameNetwork(file, networkId)) {
         const mode = normalizeAccessMode(file.accessMode);
         return mode === "shared" || mode === "local_only";
     }
@@ -247,6 +258,9 @@ router.post(
                 shardMeta,
                 chunks,
                 accessMode,
+                ...(currentNetworkId(req)
+                    ? { networkId: currentNetworkId(req) }
+                    : {}),
             });
 
             if (!(await fileExists(record))) {
@@ -449,6 +463,7 @@ router.post("/files/upload/:uploadId/complete", authMiddleware, requireMongo, as
             shardMeta,
             chunks,
             accessMode: session.accessMode,
+            ...(currentNetworkId(req) ? { networkId: currentNetworkId(req) } : {}),
         });
 
         cleanupSessionFiles(session);
@@ -477,7 +492,7 @@ router.delete("/files/upload/:uploadId", authMiddleware, (req, res) => {
 
 router.get("/files", authMiddleware, async (req, res) => {
     try {
-        const files = await loadLibraryFiles(req.user.id);
+        const files = await loadLibraryFiles(req.user.id, currentNetworkId(req));
         res.status(200).json({ files });
     } catch {
         res.status(500).json({ message: "Could not load files" });
@@ -495,8 +510,11 @@ router.post("/files/sync-folder", authMiddleware, requireMongo, async (req, res)
             });
         }
 
-        const result = await reconcileExplorerFolder(req.user.id);
-        const files = await loadLibraryFiles(req.user.id);
+        const result = await reconcileExplorerFolder(
+            req.user.id,
+            currentNetworkId(req)
+        );
+        const files = await loadLibraryFiles(req.user.id, currentNetworkId(req));
 
         res.status(200).json({
             message:
@@ -647,7 +665,7 @@ router.delete("/files/:id", authMiddleware, requireMongo, async (req, res) => {
             return res.status(404).json({ message: "File not found" });
         }
 
-        if (!canDeleteFile(file, req.user)) {
+        if (!canDeleteFile(file, req.user, currentNetworkId(req))) {
             return res.status(403).json({
                 message: "You can only delete your own private files, or Shared / Local Only files.",
             });
@@ -679,6 +697,7 @@ router.get("/files/:id/download", authMiddleware, requireMongo, async (req, res)
         const access = canAccessFileDownload(file, req.user, {
             isTrustedNetwork: req.isTrustedNetwork,
             configured: req.trustedNetworkConfigured,
+            networkId: currentNetworkId(req),
         });
         if (!access.ok) {
             return res.status(access.status).json({
