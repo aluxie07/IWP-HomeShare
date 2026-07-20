@@ -3,10 +3,19 @@ import { isLoggedIn } from "./authStorage";
 
 const LAST_ACTIVITY_KEY = "homeshare_last_activity";
 const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
-const CHECK_INTERVAL_MS = 15 * 1000;
+const CHECK_INTERVAL_MS = 10 * 1000;
 
 /** Only real interaction on this site resets the timer — not switching tabs back. */
-const ACTIVITY_EVENTS = ["mousedown", "keydown", "scroll", "touchstart", "click"];
+const ACTIVITY_EVENTS = [
+    "mousedown",
+    "mousemove",
+    "keydown",
+    "scroll",
+    "touchstart",
+    "click",
+    "pointerdown",
+    "wheel",
+];
 
 export function touchSessionActivity() {
     try {
@@ -34,6 +43,10 @@ function getLastActivity() {
     }
 }
 
+function nowMs() {
+    return Date.now();
+}
+
 /**
  * Logs the user out after 15 minutes with no interaction on HomeShare.
  * Time spent on other tabs/sites counts toward the timeout.
@@ -41,6 +54,7 @@ function getLastActivity() {
  */
 export function useIdleTimeout(enabled, onTimeout) {
     const onTimeoutRef = useRef(onTimeout);
+    const lastActivityRef = useRef(nowMs());
     onTimeoutRef.current = onTimeout;
 
     useEffect(() => {
@@ -48,6 +62,8 @@ export function useIdleTimeout(enabled, onTimeout) {
             return undefined;
         }
 
+        const start = nowMs();
+        lastActivityRef.current = start;
         touchSessionActivity();
 
         let throttled = false;
@@ -56,12 +72,14 @@ export function useIdleTimeout(enabled, onTimeout) {
             if (!isLoggedIn()) {
                 return;
             }
-            const last = getLastActivity();
+            const stored = getLastActivity();
+            const last =
+                stored && stored > 0 && stored <= nowMs() ? stored : lastActivityRef.current;
             if (!last) {
                 touchSessionActivity();
                 return;
             }
-            if (Date.now() - last >= IDLE_TIMEOUT_MS) {
+            if (nowMs() - last >= IDLE_TIMEOUT_MS) {
                 clearSessionActivity();
                 onTimeoutRef.current?.();
             }
@@ -76,6 +94,7 @@ export function useIdleTimeout(enabled, onTimeout) {
                 return;
             }
             throttled = true;
+            lastActivityRef.current = nowMs();
             touchSessionActivity();
             window.setTimeout(() => {
                 throttled = false;
