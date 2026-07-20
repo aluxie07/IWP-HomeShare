@@ -8,6 +8,7 @@ import {
     switchToCloudApi,
     testAndSetApiOverride,
     buildApiFetchOptions,
+    probeApiDetailed,
 } from "../utils/apiDiscovery";
 
 const PUBLIC = process.env.PUBLIC_URL || "";
@@ -25,25 +26,31 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
     const [checking, setChecking] = useState(false);
     const [zipAvailable, setZipAvailable] = useState(null);
     const [shareInfo, setShareInfo] = useState(null);
+    const [shareInfoLoading, setShareInfoLoading] = useState(false);
     const [copyNote, setCopyNote] = useState("");
 
     const loadShareInfo = async (baseUrl) => {
         if (!baseUrl) {
             setShareInfo(null);
-            return;
+            return null;
         }
+        setShareInfoLoading(true);
         try {
             const res = await fetch(`${String(baseUrl).replace(/\/$/, "")}/local/share-info`, {
                 ...buildApiFetchOptions(baseUrl),
             });
             if (!res.ok) {
                 setShareInfo(null);
-                return;
+                return null;
             }
             const data = await res.json();
             setShareInfo(data);
+            return data;
         } catch {
             setShareInfo(null);
+            return null;
+        } finally {
+            setShareInfoLoading(false);
         }
     };
 
@@ -61,6 +68,29 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                     setZipAvailable(false);
                 }
             });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        (async () => {
+            const mode = getApiMode();
+            const url = getDiscoveredApiUrl();
+            if (mode !== "local" && mode !== "manual") {
+                return;
+            }
+            const probe = await probeApiDetailed(url);
+            if (cancelled || !probe.ok) {
+                return;
+            }
+            setApiMode(mode);
+            setApiUrl(url);
+            setConnected(true);
+        })();
 
         return () => {
             cancelled = true;
@@ -98,8 +128,9 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
             onDiscoveryUpdated?.(result);
 
             if (result.connected && (result.mode === "local" || result.mode === "manual")) {
+                await loadShareInfo(result.url);
                 setStatus(
-                    "Local server found. Register your trusted network under Network settings (first registrant becomes admin)."
+                    "Local server found. Copy a LAN address below for other devices, then register your network under Network settings."
                 );
                 setIsError(false);
             } else if (result.mode === "cloud" && result.connected) {
@@ -141,6 +172,7 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
             setApiUrl(result.url);
             setConnected(true);
             onDiscoveryUpdated?.(result);
+            await loadShareInfo(result.url);
             setStatus(`Connected to ${result.url}.`);
             setIsError(false);
         } catch (err) {
@@ -201,6 +233,55 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
 
     const isLocalActive =
         connected && (apiMode === "local" || apiMode === "manual");
+
+    const lanApiUrls =
+        shareInfo?.apiUrls?.length > 0
+            ? shareInfo.apiUrls
+            : shareInfo?.lanIps?.map((ip) => `http://${ip}:8080`) || [];
+
+    const renderLanUrlCopyBlock = () => {
+        if (!isLocalActive) {
+            return null;
+        }
+
+        return (
+            <div className="local-setup-lan-urls">
+                <h3 className="files-section-title">LAN address for other devices</h3>
+                <p className="files-muted">
+                    After Detect on the <strong>host PC</strong>, copy one of these URLs. On a
+                    phone or another PC, open this site → Local Network Mode → paste under{" "}
+                    <strong>Connect to this server</strong>.
+                </p>
+                {shareInfoLoading && (
+                    <p className="files-muted">Loading LAN address from server…</p>
+                )}
+                {!shareInfoLoading && lanApiUrls.length > 0 && (
+                    <ul className="local-setup-lan-url-list">
+                        {lanApiUrls.map((url) => (
+                            <li key={url} className="local-setup-lan-url-row">
+                                <code className="local-setup-lan-url-text">{url}</code>
+                                <button
+                                    type="button"
+                                    className="auth-form__secondary-btn local-setup-lan-copy-btn"
+                                    onClick={() => copyText(url)}
+                                >
+                                    Copy
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+                {!shareInfoLoading && lanApiUrls.length === 0 && (
+                    <p className="files-muted">
+                        Could not read a LAN IP from the server. On the host PC run{" "}
+                        <code>ipconfig</code> and use{" "}
+                        <code>http://YOUR-WIFI-IP:8080</code>.
+                    </p>
+                )}
+                {copyNote && <p className="files-muted local-setup-copy-note">{copyNote}</p>}
+            </div>
+        );
+    };
 
     return (
         <section className="dashboard-page dashboard-page--wide">
@@ -308,6 +389,8 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                     >
                         Connect to this PC (127.0.0.1)
                     </button>
+
+                    {renderLanUrlCopyBlock()}
                 </div>
 
                 <div className="local-setup-manual">
@@ -316,24 +399,6 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                         <strong>Detect does not work on phones or other PCs</strong> — it only
                         checks <code>127.0.0.1</code> on the device you’re holding. Enter the{" "}
                         <strong>host PC’s LAN address</strong> below instead.
-                    </p>
-                    {shareInfo?.apiUrls?.length > 0 && (
-                        <p className="files-muted">
-                            From the host server window, use one of these addresses on other
-                            devices:
-                            {shareInfo.apiUrls.map((url) => (
-                                <span key={url} className="local-setup-unc">
-                                    {" "}
-                                    <code>{url}</code>
-                                </span>
-                            ))}
-                        </p>
-                    )}
-                    <p className="files-muted">
-                        On the PC running the server, check the console for{" "}
-                        <strong>Other devices on this Wi-Fi</strong> (e.g.{" "}
-                        <code>http://192.168.50.193:8080</code>). Run{" "}
-                        <code>ipconfig</code> if needed. Both devices must be on the same Wi‑Fi.
                     </p>
                     <form onSubmit={handleSaveManualUrl}>
                         <label className="share-modal-label">
@@ -385,7 +450,6 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                                 >
                                     Copy folder path
                                 </button>
-                                {copyNote && <p className="files-muted">{copyNote}</p>}
                                 {!shareInfo.enabled && shareInfo.message && (
                                     <p className="error">{shareInfo.message}</p>
                                 )}

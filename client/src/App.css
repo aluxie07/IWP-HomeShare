@@ -1759,6 +1759,51 @@
   text-align: left;
 }
 
+.local-setup-lan-urls {
+  margin-top: 1.25rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid #b3d4ff;
+  border-radius: 12px;
+  background: #f0f7ff;
+}
+
+.local-setup-lan-url-list {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.local-setup-lan-url-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.local-setup-lan-url-text {
+  flex: 1 1 12rem;
+  padding: 0.45rem 0.6rem;
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+
+.local-setup-lan-copy-btn {
+  flex-shrink: 0;
+}
+
+.local-setup-copy-note {
+  margin-top: 0.5rem;
+  margin-bottom: 0;
+  font-weight: 600;
+  color: #1b5e20;
+}
+
 .local-setup-join-folder {
   margin-top: 1.5rem;
   padding-top: 1rem;
