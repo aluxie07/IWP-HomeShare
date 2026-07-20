@@ -23,6 +23,11 @@ const GRIDFS_BUCKET = "homeshare_files";
  * - gridfs → legacy MongoDB GridFS
  */
 function getStorageMode() {
+    // Packaged local server (Start HomeShare.bat) always stores on disk
+    if (process.env.HOMESHARE_DATA_DIR) {
+        return "disk";
+    }
+
     const mode = (process.env.FILE_STORAGE || "").trim().toLowerCase();
     if (mode === "disk" || mode === "shards" || mode === "gridfs") {
         return mode;

@@ -184,9 +184,12 @@ app.get("/", (req, res) => {
 
 app.get("/health", (req, res) => {
     const mongoConnected = mongoose.connection.readyState === 1;
+    const storageMode = getStorageMode();
     const payload = {
         ok: mongoConnected,
         mongo: mongoConnected ? "connected" : "disconnected",
+        storageMode,
+        storageScope: storageMode === "disk" ? "local" : "cloud",
         email: getEmailDiagnostics(),
         recaptchaRequired: isRecaptchaRequired(),
     };

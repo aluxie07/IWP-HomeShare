@@ -49,7 +49,7 @@ const CHUNK_BODY_LIMIT = DEFAULT_CHUNK_SIZE + 1024 * 1024;
 
 /** Where file bytes live: local disk vs cloud (GridFS / shards) */
 function getStorageScope(file) {
-    const kind = file.storageKind;
+    const kind = String(file.storageKind || "").toLowerCase();
     if (kind === "disk") {
         return "local";
     }
@@ -59,9 +59,27 @@ function getStorageScope(file) {
     if (file.gridfsId || (Array.isArray(file.shards) && file.shards.length > 0)) {
         return "cloud";
     }
-    if (file.storagePath) {
+    if (Array.isArray(file.chunks) && file.chunks.length > 0) {
+        return "cloud";
+    }
+
+    const storagePath = String(file.storagePath || "");
+    if (storagePath) {
+        const lower = storagePath.toLowerCase();
+        if (
+            lower.includes("homeshare") ||
+            lower.includes("uploads") ||
+            path.isAbsolute(storagePath)
+        ) {
+            return "local";
+        }
+    }
+
+    // Running the local disk server: files without cloud markers are local
+    if (shouldUseDisk()) {
         return "local";
     }
+
     return "cloud";
 }
 
@@ -78,6 +96,7 @@ function formatFile(file) {
         fileSize: file.fileSize,
         fileType: file.fileType,
         accessMode: normalizeAccessMode(file.accessMode),
+        storageKind: file.storageKind || null,
         storageScope: getStorageScope(file),
         uploadedBy:
             file.uploadedByUsername ||

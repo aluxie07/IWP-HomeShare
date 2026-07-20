@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import NetworkStatusIndicator from "../components/NetworkStatusIndicator";
 import { getApiUrl, authHeaders, formatFileSize, formatUploadDate } from "../utils/api";
 import { ACCESS_MODES, getAccessModeLabel } from "../utils/accessModes";
+import { getApiMode } from "../utils/apiDiscovery";
+import { getStorageScopeLabel } from "../utils/fileStorageScope";
 
 const FIVE_GB = 5 * 1024 * 1024 * 1024;
 
@@ -103,6 +105,7 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
     const [files, setFiles] = useState([]);
     const [loadingList, setLoadingList] = useState(true);
     const [accessMode, setAccessMode] = useState("private");
+    const [uploadScope, setUploadScope] = useState(null);
 
     const loadFiles = useCallback(async () => {
         setLoadingList(true);
@@ -131,6 +134,26 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
     useEffect(() => {
         loadFiles();
     }, [loadFiles]);
+
+    useEffect(() => {
+        let cancelled = false;
+        fetch(`${getApiUrl()}/health`, { cache: "no-store" })
+            .then((res) => res.json())
+            .then((data) => {
+                if (!cancelled) {
+                    setUploadScope(data.storageScope || null);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    const mode = getApiMode();
+                    setUploadScope(mode === "local" || mode === "manual" ? "local" : "cloud");
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const handleFileChange = (e) => {
         const file = e.target.files?.[0] || null;
@@ -168,7 +191,12 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
                 onRedirectToLogin,
             });
 
-            setStatus(data.message || "File uploaded successfully");
+            const scope = data.file?.storageScope;
+            setStatus(
+                scope
+                    ? `Uploaded to ${getStorageScopeLabel(scope).toLowerCase()} storage.`
+                    : data.message || "File uploaded successfully"
+            );
             setIsError(false);
             setSelectedFile(null);
             setProgress(100);
@@ -196,6 +224,16 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
                 </p>
 
                 <NetworkStatusIndicator compact />
+
+                {uploadScope && (
+                    <p className="files-muted">
+                        New uploads go to{" "}
+                        <strong>{getStorageScopeLabel(uploadScope)}</strong> storage
+                        {uploadScope === "local"
+                            ? " (this PC’s HomeShare folder)."
+                            : " (cloud / Render). Detect the local server if you want Local files."}
+                    </p>
+                )}
 
                 <form className="file-upload-form" onSubmit={handleUpload}>
                     <label className="file-upload-label" htmlFor="file-upload-input">
@@ -272,6 +310,7 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
                                 <li key={file.id} className="file-list-item">
                                     <span className="file-list-name">{file.filename}</span>
                                     <span className="file-list-meta">
+                                        {getStorageScopeLabel(file.storageScope)} ·{" "}
                                         {getAccessModeLabel(file.accessMode)} ·{" "}
                                         {formatFileSize(file.fileSize)} ·{" "}
                                         {formatUploadDate(file.uploadDate)}

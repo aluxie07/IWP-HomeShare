@@ -31,6 +31,8 @@ async function main() {
 
     require("dotenv").config({ path: envPath });
     process.env.MONGO_URI = normalizeMongoUri(process.env.MONGO_URI);
+    // Always disk for the Windows local package — never GridFS/cloud shards
+    process.env.FILE_STORAGE = "disk";
 
     if (!process.env.MONGO_URI || process.env.MONGO_URI.includes("USER:PASSWORD")) {
         console.error("");
@@ -43,6 +45,7 @@ async function main() {
         }
         require("dotenv").config({ path: envPath, override: true });
         process.env.MONGO_URI = normalizeMongoUri(process.env.MONGO_URI);
+        process.env.FILE_STORAGE = "disk";
     }
 
     if (
