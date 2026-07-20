@@ -7,6 +7,9 @@ const {
     subnetFromIp,
     isIpv4,
     isPrivateIpv4,
+    isPrivateLanCidr,
+    isLocalDiskServer,
+    isLoopbackIpv4,
     maskClientIp,
     findNetworkBySubnet,
     isNetworkAdmin,
@@ -16,7 +19,11 @@ const router = express.Router();
 
 function formatNetworkStatus(req) {
     const config = req.trustedNetworkConfig;
-    const suggestedSubnet = isIpv4(req.clientIp) ? subnetFromIp(req.clientIp) : null;
+    const suggestedSubnet =
+        isIpv4(req.clientIp) && !isLoopbackIpv4(req.clientIp)
+            ? subnetFromIp(req.clientIp)
+            : null;
+    const onLocalServer = isLocalDiskServer();
 
     return {
         configured: Boolean(config),
@@ -27,8 +34,9 @@ function formatNetworkStatus(req) {
         isNetworkAdmin: Boolean(req.isNetworkAdmin),
         canRegister:
             !config &&
-            Boolean(suggestedSubnet) &&
-            isPrivateIpv4(req.clientIp),
+            (onLocalServer ||
+                (Boolean(suggestedSubnet) && isPrivateIpv4(req.clientIp))),
+        requiresLocalServer: !onLocalServer && !isPrivateIpv4(req.clientIp),
         trustedNetwork: config
             ? {
                   id: config._id,
@@ -55,7 +63,10 @@ router.get("/network/status", authMiddleware, (req, res) => {
 /** Settings for the network matching this device's current IP/subnet */
 router.get("/admin/network", authMiddleware, async (req, res) => {
     try {
-        const suggestedSubnet = isIpv4(req.clientIp) ? subnetFromIp(req.clientIp) : null;
+        const suggestedSubnet =
+            isIpv4(req.clientIp) && !isLoopbackIpv4(req.clientIp)
+                ? subnetFromIp(req.clientIp)
+                : null;
         const config = req.trustedNetworkConfig;
 
         if (!config) {
@@ -63,12 +74,18 @@ router.get("/admin/network", authMiddleware, async (req, res) => {
             if (suggestedSubnet) {
                 subnetTaken = Boolean(await findNetworkBySubnet(suggestedSubnet));
             }
+            const onLocalServer = isLocalDiskServer();
+            const canRegister =
+                !subnetTaken &&
+                (onLocalServer ||
+                    (Boolean(suggestedSubnet) && isPrivateIpv4(req.clientIp)));
             return res.status(200).json({
                 configured: false,
                 currentClientIp: req.maskedClientIp,
                 suggestedSubnet,
                 subnetAlreadyRegistered: subnetTaken,
-                canRegister: Boolean(suggestedSubnet) && isPrivateIpv4(req.clientIp) && !subnetTaken,
+                canRegister,
+                requiresLocalServer: !onLocalServer && !isPrivateIpv4(req.clientIp),
                 isNetworkAdmin: false,
             });
         }
@@ -97,6 +114,8 @@ router.get("/admin/network", authMiddleware, async (req, res) => {
 router.post("/admin/network/register", authMiddleware, async (req, res) => {
     try {
         const clientIp = req.clientIp;
+        const onLocalServer = isLocalDiskServer();
+        const { label, gatewayIp, subnet: customSubnet } = req.body || {};
 
         if (!isIpv4(clientIp)) {
             return res.status(400).json({
@@ -105,18 +124,39 @@ router.post("/admin/network/register", authMiddleware, async (req, res) => {
             });
         }
 
-        if (!isPrivateIpv4(clientIp)) {
+        if (!onLocalServer && !isPrivateIpv4(clientIp)) {
             return res.status(400).json({
                 message:
-                    "Register a network from a private LAN address (e.g. home or office Wi-Fi), not from the public internet.",
+                    "The cloud site cannot see your home Wi-Fi address. Open Local Network setup, connect to your local server (Detect or enter http://YOUR-PC-IP:8080), then register the network again.",
+                code: "REQUIRES_LOCAL_SERVER",
             });
         }
 
-        const { label, gatewayIp, subnet: customSubnet } = req.body || {};
-        const subnet = customSubnet?.trim() || subnetFromIp(clientIp);
+        let subnet = customSubnet?.trim() || null;
+
+        if (!subnet && isPrivateIpv4(clientIp) && !isLoopbackIpv4(clientIp)) {
+            subnet = subnetFromIp(clientIp);
+        }
+
+        if (!subnet && onLocalServer && isLoopbackIpv4(clientIp)) {
+            return res.status(400).json({
+                message:
+                    "Enter your home Wi-Fi subnet below (e.g. 192.168.1.0/24). In Windows, run ipconfig and use the IPv4 address of your Wi-Fi adapter — replace the last number with 0/24.",
+                code: "SUBNET_REQUIRED",
+            });
+        }
 
         if (!subnet) {
-            return res.status(400).json({ message: "Could not derive a subnet from your IP address" });
+            return res.status(400).json({
+                message: "Enter a private subnet in CIDR form, e.g. 192.168.1.0/24",
+            });
+        }
+
+        if (!isPrivateLanCidr(subnet)) {
+            return res.status(400).json({
+                message:
+                    "Subnet must be a private LAN range (192.168.x.0/24, 10.x.x.0/24, etc.), not localhost or the public internet.",
+            });
         }
 
         const existing = await findNetworkBySubnet(subnet);

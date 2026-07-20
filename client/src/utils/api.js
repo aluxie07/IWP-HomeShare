@@ -29,7 +29,7 @@ export function getNetworkErrorMessage(err) {
     }
 
     if (err instanceof TypeError) {
-        return `Cannot reach the API at ${getApiUrl()}. If using Local Network Mode, run the local server starter and refresh. Otherwise confirm REACT_APP_API_URL points to your Render URL.`;
+        return `Cannot reach the API at ${getApiUrl()}. For Local Network Mode, start the server on this PC (see Local setup) and Detect again. Otherwise confirm REACT_APP_API_URL points to your Render URL.`;
     }
 
     return "Could not reach server. Is the backend running?";

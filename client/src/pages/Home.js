@@ -31,7 +31,7 @@ function Home({ onGetStarted, onLocalNetworkSetup, showGetStarted }) {
                             className="home-local-mode-btn"
                             onClick={onLocalNetworkSetup}
                         >
-                            Local Network Mode (download)
+                            Local Network Mode
                         </button>
                     </div>
                 </div>

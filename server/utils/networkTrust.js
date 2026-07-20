@@ -96,6 +96,26 @@ function isPrivateIpv4(ip) {
     });
 }
 
+function isLocalDiskServer() {
+    return (process.env.FILE_STORAGE || "").trim().toLowerCase() === "disk";
+}
+
+function isLoopbackIpv4(ip) {
+    return isIpv4(ip) && (ip === "127.0.0.1" || ip.startsWith("127."));
+}
+
+/** CIDR must use a private RFC1918-style base (not 127.x for registration target) */
+function isPrivateLanCidr(cidr) {
+    const [ipPart] = String(cidr || "").split("/");
+    if (!isIpv4(ipPart)) {
+        return false;
+    }
+    if (ipPart.startsWith("127.")) {
+        return false;
+    }
+    return isPrivateIpv4(ipPart);
+}
+
 function subnetFromIp(ip, prefix = 24) {
     const long = ipToLong(ip);
     if (long == null) {
@@ -127,6 +147,14 @@ function maskClientIp(ip) {
 async function findNetworkForIp(ip) {
     if (!isIpv4(ip)) {
         return null;
+    }
+
+    // Host PC often uses http://127.0.0.1:8080 — treat as on-network when one LAN is registered
+    if (isLocalDiskServer() && isLoopbackIpv4(ip)) {
+        const localNetworks = await TrustedNetwork.find({}).sort({ updatedAt: -1 });
+        if (localNetworks.length === 1) {
+            return localNetworks[0];
+        }
     }
 
     const networks = await TrustedNetwork.find({}).sort({ updatedAt: -1 });
@@ -178,6 +206,9 @@ module.exports = {
     isIpv4,
     isIpInCidr,
     isPrivateIpv4,
+    isPrivateLanCidr,
+    isLocalDiskServer,
+    isLoopbackIpv4,
     subnetFromIp,
     maskClientIp,
     findNetworkForIp,

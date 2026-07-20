@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import NetworkStatusIndicator from "../components/NetworkStatusIndicator";
 import { getApiUrl, authHeaders } from "../utils/api";
+import { getApiMode } from "../utils/apiDiscovery";
 
 function NetworkSettings({ onRedirectToLogin, onBack }) {
     const [config, setConfig] = useState(null);
@@ -49,6 +50,11 @@ function NetworkSettings({ onRedirectToLogin, onBack }) {
 
     const isAdmin = Boolean(config?.isNetworkAdmin);
     const canRegister = Boolean(config?.canRegister);
+    const requiresLocalServer = Boolean(config?.requiresLocalServer);
+    const onLocalApi =
+        getApiMode() === "local" ||
+        getApiMode() === "manual" ||
+        !getApiUrl().includes("onrender.com");
 
     const handleRegister = async () => {
         setSubmitting(true);
@@ -222,6 +228,25 @@ function NetworkSettings({ onRedirectToLogin, onBack }) {
                             </p>
                         )}
 
+                        {requiresLocalServer && (
+                            <p className="error">
+                                You are on the <strong>cloud API</strong>, which only sees your
+                                public internet address — not home Wi‑Fi. Go to{" "}
+                                <strong>Local Network setup</strong>, start the server on this PC
+                                (see Step 1 there), click <strong>Detect</strong> (or enter{" "}
+                                <code>http://YOUR-PC-IP:8080</code>), then return here to register.
+                            </p>
+                        )}
+
+                        {onLocalApi && !config?.configured && canRegister && (
+                            <p className="files-muted">
+                                Connected to your local server. If Detect used{" "}
+                                <code>127.0.0.1</code>, enter your Wi‑Fi subnet below (from{" "}
+                                <code>ipconfig</code>, e.g. if IPv4 is 192.168.1.42 use{" "}
+                                <code>192.168.1.0/24</code>).
+                            </p>
+                        )}
+
                         {config?.subnetAlreadyRegistered && !config?.configured && (
                             <p className="files-muted">
                                 This Wi-Fi is already registered. Ask the network admin if you need
@@ -244,12 +269,13 @@ function NetworkSettings({ onRedirectToLogin, onBack }) {
                                     />
                                 </label>
                                 <label className="share-modal-label">
-                                    Subnet (CIDR)
+                                    Subnet (CIDR) — required on local server if using 127.0.0.1
                                     <input
                                         type="text"
                                         value={subnet}
                                         onChange={(e) => setSubnet(e.target.value)}
                                         placeholder="192.168.1.0/24"
+                                        required
                                     />
                                 </label>
                                 <label className="share-modal-label">

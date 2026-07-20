@@ -15,10 +15,6 @@ function getDataDir() {
         return process.env.HOMESHARE_DATA_DIR;
     }
 
-    if (process.pkg) {
-        return path.join(process.env.APPDATA || os.homedir(), "HomeShare", "local-server");
-    }
-
     return path.join(__dirname, "..");
 }
 
