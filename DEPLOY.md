@@ -81,11 +81,11 @@ Trusted-network detection compares each request’s IP to a subnet stored in Mon
 
 ### Local mode from GitHub Pages
 
-1. On a PC on your Wi‑Fi, clone the repo and start the API: `cd server`, copy `.env.example` to `.env` (set `MONGO_URI`, `JWT_SECRET`, keep `FILE_STORAGE=disk`), then `npm install && npm start`.
-2. Open the live site → **Local Network Mode** → **Detect local server** (or enter `http://YOUR-PC-LAN-IP:8080` on other devices).
-3. Register the network under **Network settings** (first registrant becomes network admin).
+Users download **HomeShare-Local-Windows.zip** from the site (no Node install). Unzip → run `Start HomeShare.bat` → paste `MONGO_URI` in the setup window → **Detect local server** on the website.
 
-The cloud API (Render) cannot see home Wi‑Fi addresses — LAN features require the server running on that network.
+Config is saved to `%APPDATA%\HomeShare\local-server\.env` (not inside the unzipped folder).
+
+Maintainers: `cd server && npm run build:local-package` (Windows). The Pages deploy workflow builds the ZIP automatically on each push to `main`.
 
 ## 6. Activation emails in production
 

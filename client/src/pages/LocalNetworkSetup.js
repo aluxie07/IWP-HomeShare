@@ -9,6 +9,11 @@ import {
     testAndSetApiOverride,
 } from "../utils/apiDiscovery";
 
+const PUBLIC = process.env.PUBLIC_URL || "";
+const LOCAL_ZIP_PATH = `${PUBLIC}/downloads/HomeShare-Local-Windows.zip`;
+const LOCAL_ZIP_URL =
+    process.env.REACT_APP_LOCAL_PACKAGE_URL || LOCAL_ZIP_PATH;
+
 function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
     const [apiMode, setApiMode] = useState(getApiMode());
     const [apiUrl, setApiUrl] = useState(getDiscoveredApiUrl());
@@ -17,6 +22,7 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
     const [status, setStatus] = useState("");
     const [isError, setIsError] = useState(false);
     const [checking, setChecking] = useState(false);
+    const [zipAvailable, setZipAvailable] = useState(null);
     const [shareInfo, setShareInfo] = useState(null);
     const [copyNote, setCopyNote] = useState("");
 
@@ -46,6 +52,26 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
             setShareInfo(null);
         }
     };
+
+    useEffect(() => {
+        let cancelled = false;
+
+        fetch(LOCAL_ZIP_URL, { method: "HEAD" })
+            .then((res) => {
+                if (!cancelled) {
+                    setZipAvailable(res.ok);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setZipAvailable(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     useEffect(() => {
         if (connected && (apiMode === "local" || apiMode === "manual")) {
@@ -98,7 +124,7 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                 setIsError(true);
             } else {
                 setStatus(
-                    "No server responded on port 8080. Start the server on this PC (Step 1), then Detect again."
+                    "No server responded. Download and run the zip below (Start HomeShare.bat), then Detect again."
                 );
                 setIsError(true);
             }
@@ -193,8 +219,9 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                 </div>
 
                 <p className="files-page-intro network-settings-intro">
-                    Run the HomeShare API on a PC on your Wi‑Fi, then connect this site to it.
-                    Normal browsing uses the cloud API until you Detect or enter a LAN address.
+                    Download <strong>one zip</strong> — no Node.js install needed. Unzip,
+                    double-click <strong>Start HomeShare.bat</strong>, paste your MongoDB URI on
+                    first launch, then <strong>Detect local server</strong> below.
                 </p>
 
                 <div
@@ -218,29 +245,57 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
                 </div>
 
                 <div className="local-setup-steps">
-                    <h3 className="files-section-title">Step 1 — Start the server on this PC</h3>
+                    <h3 className="files-section-title">Step 1 — Download (Windows)</h3>
                     <p className="files-muted">
-                        From the project repo (requires Node.js):
+                        Everything is included (Node + server). You only need a free MongoDB
+                        Atlas connection string.
                     </p>
-                    <ol className="local-setup-join-steps">
-                        <li>
-                            <code>cd server</code>
-                        </li>
-                        <li>
-                            Copy <code>.env.example</code> to <code>.env</code> and set{" "}
-                            <code>MONGO_URI</code>, <code>JWT_SECRET</code>, and keep{" "}
-                            <code>FILE_STORAGE=disk</code>
-                        </li>
-                        <li>
-                            <code>npm install</code> then <code>npm start</code>
-                        </li>
-                        <li>Leave the terminal open — the API listens on port 8080</li>
-                    </ol>
+                    <div className="local-setup-downloads">
+                        <a
+                            className={`logout-btn local-setup-download-btn local-setup-download-btn--primary ${
+                                zipAvailable === false ? "local-setup-download-btn--disabled" : ""
+                            }`}
+                            href={LOCAL_ZIP_URL}
+                            download="HomeShare-Local-Windows.zip"
+                            aria-disabled={zipAvailable === false}
+                            onClick={(e) => {
+                                if (zipAvailable === false) {
+                                    e.preventDefault();
+                                }
+                            }}
+                        >
+                            Download HomeShare Local (.zip)
+                        </a>
+                        <a
+                            className="files-link-btn"
+                            href={`${PUBLIC}/downloads/local-network-readme.txt`}
+                            download
+                        >
+                            Setup instructions (.txt)
+                        </a>
+                    </div>
+                    {zipAvailable === false && (
+                        <p className="error local-setup-missing-zip">
+                            <strong>Package not on this server yet.</strong> Push to{" "}
+                            <code>main</code> and wait for the deploy workflow, or build locally:{" "}
+                            <code>cd server &amp;&amp; npm run build:local-package</code>
+                        </p>
+                    )}
+                    {zipAvailable === null && (
+                        <p className="files-muted">Checking download availability…</p>
+                    )}
 
-                    <h3 className="files-section-title">Step 2 — Connect this site</h3>
+                    <h3 className="files-section-title">Step 2 — Unzip and run</h3>
                     <p className="files-muted">
-                        Click Detect to probe <code>http://127.0.0.1:8080</code>, or use Connect
-                        to this PC. Allow local network access if the browser asks.
+                        Unzip anywhere, double-click <strong>Start HomeShare.bat</strong>. On first
+                        run a setup window asks for <code>MONGO_URI</code> — config is saved to{" "}
+                        <code>%APPDATA%\HomeShare\local-server\.env</code>. Keep the window open.
+                    </p>
+
+                    <h3 className="files-section-title">Step 3 — Detect local server</h3>
+                    <p className="files-muted">
+                        Click Detect to probe <code>http://127.0.0.1:8080</code>. Allow local
+                        network access if the browser asks.
                     </p>
                     <button
                         type="button"

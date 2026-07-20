@@ -11,4 +11,5 @@ client/build/
 server/uploads/*
 !server/uploads/.gitkeep
 dist/
-client/public/downloads/
+client/public/downloads/*.zip
+*.exe

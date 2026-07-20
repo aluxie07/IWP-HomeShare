@@ -22,7 +22,7 @@ function LocalNetworkBanner({ apiMode, apiUrl, connected, onOpenSetup }) {
                 <span>
                     {isLocal && connected
                         ? ` Connected to ${apiUrl}. Local Only files and trusted-network features are available.`
-                        : " Connect to a LAN server (Local setup) for trusted-network features."}
+                        : " Download and run the local zip to enable Local Network Mode."}
                 </span>
             </div>
             <button type="button" className="local-network-banner__btn" onClick={onOpenSetup}>

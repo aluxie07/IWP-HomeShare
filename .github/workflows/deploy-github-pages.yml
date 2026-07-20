@@ -15,11 +15,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build-local-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Build HomeShare Local ZIP
+        working-directory: server
+        run: npm run build:local-package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: homeshare-local-zip
+          path: client/public/downloads/HomeShare-Local-Windows.zip
+          if-no-files-found: error
+          retention-days: 1
+
   build:
+    needs: build-local-package
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download local package for site
+        uses: actions/download-artifact@v4
+        with:
+          name: homeshare-local-zip
+          path: client/public/downloads
 
       - name: Setup Node
         uses: actions/setup-node@v4
