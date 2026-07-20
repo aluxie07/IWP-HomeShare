@@ -47,6 +47,24 @@ const { softDeleteFile, isFileDeleted } = require("../utils/softDeleteFile");
 const router = express.Router();
 const CHUNK_BODY_LIMIT = DEFAULT_CHUNK_SIZE + 1024 * 1024;
 
+/** Where file bytes live: local disk vs cloud (GridFS / shards) */
+function getStorageScope(file) {
+    const kind = file.storageKind;
+    if (kind === "disk") {
+        return "local";
+    }
+    if (kind === "gridfs" || kind === "shards") {
+        return "cloud";
+    }
+    if (file.gridfsId || (Array.isArray(file.shards) && file.shards.length > 0)) {
+        return "cloud";
+    }
+    if (file.storagePath) {
+        return "local";
+    }
+    return "cloud";
+}
+
 function formatFile(file) {
     const ownerDoc = file.owner && typeof file.owner === "object" ? file.owner : null;
     const deletedByDoc =
@@ -60,6 +78,7 @@ function formatFile(file) {
         fileSize: file.fileSize,
         fileType: file.fileType,
         accessMode: normalizeAccessMode(file.accessMode),
+        storageScope: getStorageScope(file),
         uploadedBy:
             file.uploadedByUsername ||
             ownerDoc?.username ||

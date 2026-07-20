@@ -9,6 +9,11 @@ import {
     formatUploadDate,
 } from "../utils/api";
 import { ACCESS_MODES, canShareFile } from "../utils/accessModes";
+import {
+    STORAGE_FILTERS,
+    getStorageScopeLabel,
+    matchesStorageFilter,
+} from "../utils/fileStorageScope";
 
 function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
     const [files, setFiles] = useState([]);
@@ -20,10 +25,15 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
     const [updatingModeId, setUpdatingModeId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
     const [syncNote, setSyncNote] = useState("");
+    const [storageFilter, setStorageFilter] = useState("all");
 
     const activeFiles = useMemo(
         () => files.filter((file) => !file.deleted),
         [files]
+    );
+    const filteredActiveFiles = useMemo(
+        () => activeFiles.filter((file) => matchesStorageFilter(file, storageFilter)),
+        [activeFiles, storageFilter]
     );
     const deletedFiles = useMemo(
         () => files.filter((file) => file.deleted),
@@ -278,6 +288,26 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
 
                 <NetworkStatusIndicator compact />
 
+                {!loading && !error && activeFiles.length > 0 && (
+                    <div className="file-library-filters" role="group" aria-label="Filter by storage">
+                        {STORAGE_FILTERS.map((option) => (
+                            <button
+                                key={option.value}
+                                type="button"
+                                className={`file-library-filter-btn ${
+                                    storageFilter === option.value
+                                        ? "file-library-filter-btn--active"
+                                        : ""
+                                }`}
+                                aria-pressed={storageFilter === option.value}
+                                onClick={() => setStorageFilter(option.value)}
+                            >
+                                {option.label}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
                 {loading && <p className="files-muted">Loading your files…</p>}
                 {error && <p className="error">{error}</p>}
                 {!error && syncNote && <p className="files-muted">{syncNote}</p>}
@@ -291,9 +321,22 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                     </p>
                 )}
 
-                {!loading && activeFiles.length > 0 && (
+                {!loading && !error && activeFiles.length > 0 && filteredActiveFiles.length === 0 && (
+                    <p className="files-muted">
+                        No {storageFilter === "cloud" ? "cloud" : "local"} files in your library.{" "}
+                        <button
+                            type="button"
+                            className="files-link-btn"
+                            onClick={() => setStorageFilter("all")}
+                        >
+                            Show all files
+                        </button>
+                    </p>
+                )}
+
+                {!loading && filteredActiveFiles.length > 0 && (
                     <div className="file-grid" role="list">
-                        {activeFiles.map((file) => (
+                        {filteredActiveFiles.map((file) => (
                             <button
                                 key={file.id}
                                 type="button"
@@ -301,6 +344,13 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                 className="file-grid-tile"
                                 onClick={() => setSelectedFileId(file.id)}
                             >
+                                <span
+                                    className={`file-grid-tile__storage-badge file-grid-tile__storage-badge--${
+                                        file.storageScope === "local" ? "local" : "cloud"
+                                    }`}
+                                >
+                                    {getStorageScopeLabel(file.storageScope)}
+                                </span>
                                 <FileThumbnail file={file} onAuthError={onRedirectToLogin} />
                                 <span className="file-grid-tile__body">
                                     <span className="file-grid-tile__name" title={file.filename}>
@@ -313,7 +363,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                         <span className="file-grid-tile__badges">
                                             {file.accessMode === "local_only" && (
                                                 <span className="file-list-access-badge file-list-access-badge--local">
-                                                    Local
+                                                    LAN only
                                                 </span>
                                             )}
                                             {file.share && (
@@ -393,6 +443,23 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                         )}
 
                         <div className="file-detail-modal__meta">
+                            {!selectedFile.deleted && (
+                                <p>
+                                    <span className="file-detail-label">Storage</span>
+                                    <span
+                                        className={`file-grid-tile__storage-badge file-grid-tile__storage-badge--${
+                                            selectedFile.storageScope === "local"
+                                                ? "local"
+                                                : "cloud"
+                                        } file-grid-tile__storage-badge--inline`}
+                                    >
+                                        {getStorageScopeLabel(selectedFile.storageScope)}
+                                    </span>
+                                    {selectedFile.storageScope === "local"
+                                        ? " — on this PC’s HomeShare folder"
+                                        : " — in cloud storage (Render / Atlas)"}
+                                </p>
+                            )}
                             {!selectedFile.deleted && (
                                 <p>
                                     <span className="file-detail-label">Type / size</span>
