@@ -17,7 +17,6 @@ import SharedFile from "./pages/SharedFile";
 import NetworkSettings from "./pages/NetworkSettings";
 import LocalNetworkSetup from "./pages/LocalNetworkSetup";
 import LocalNetworkBanner from "./components/LocalNetworkBanner";
-import { isAdmin } from "./utils/authStorage";
 import { initApiDiscovery } from "./utils/apiDiscovery";
 import {
     isLoggedIn as hasStoredAuth,
