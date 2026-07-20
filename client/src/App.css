@@ -30,6 +30,62 @@
   padding: 1rem 2rem;
 }
 
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.header-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.header-mode-badge--cloud {
+  background: #e8f2ff;
+  color: #004494;
+  border: 1px solid #b3d4ff;
+}
+
+.header-mode-badge--local {
+  background: #e8f5e9;
+  color: #1b5e20;
+  border: 1px solid #a5d6a7;
+}
+
+.header-mode-exit {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #344054;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.header-mode-exit:hover:not(:disabled) {
+  border-color: #06c;
+  color: #06c;
+}
+
+.header-mode-exit:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .header-desktop-nav {
   display: flex;
   flex: 1 1 auto;
@@ -141,6 +197,11 @@
 @media (max-width: 768px) {
   .header-bar {
     padding: 0.85rem 1rem;
+  }
+
+  .header-mode-exit {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.4rem;
   }
 
   .header-desktop-nav {
@@ -373,6 +434,11 @@
   padding: 1rem;
   border-top: 1px solid #ddd;
   background: #f5f5f5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  justify-content: center;
+  align-items: center;
 }
 
 .footer-link,
@@ -383,6 +449,34 @@
   cursor: pointer;
   text-decoration: underline;
   font-size: 1rem;
+}
+
+.help-page-card {
+  max-width: 720px;
+}
+
+.help-section {
+  margin-top: 1.35rem;
+  padding-top: 0.25rem;
+}
+
+.help-section .files-section-title {
+  margin-bottom: 0.4rem;
+}
+
+.help-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  color: #556;
+  line-height: 1.55;
+}
+
+.help-list li {
+  margin-bottom: 0.4rem;
+}
+
+.help-section .auth-form__secondary-btn {
+  margin-top: 0.75rem;
 }
 
 .credits-card {
@@ -1665,48 +1759,6 @@
 
 .header-nav-link--settings {
   margin-left: 0.5rem;
-}
-
-.local-network-banner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.65rem 1.25rem;
-  font-family: "Jost", sans-serif;
-  font-size: 0.9rem;
-  border-bottom: 1px solid #ddd;
-}
-
-.local-network-banner--active {
-  background: #e8f5e9;
-  color: #1b5e20;
-}
-
-.local-network-banner--cloud {
-  background: #e3f2fd;
-  color: #0d47a1;
-}
-
-.local-network-banner__text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  text-align: left;
-  flex: 1;
-  min-width: 200px;
-}
-
-.local-network-banner__btn {
-  font-family: "Jost", sans-serif;
-  font-size: 0.85rem;
-  padding: 0.4rem 0.85rem;
-  border: 1px solid currentColor;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.6);
-  cursor: pointer;
-  flex-shrink: 0;
 }
 
 .home-hero-actions {

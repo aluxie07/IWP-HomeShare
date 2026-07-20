@@ -10,6 +10,7 @@ function Dashboard({
     onGoToUpload,
     onGoToLibrary,
     onGoToNetworkSettings,
+    onGoToLocalSetup,
 }) {
     const [message, setMessage] = useState("");
     const [user, setUser] = useState(() => getUser());
@@ -122,6 +123,15 @@ function Dashboard({
                     >
                         File library
                     </button>
+                    {onGoToLocalSetup && (
+                        <button
+                            type="button"
+                            className="auth-form__secondary-btn"
+                            onClick={onGoToLocalSetup}
+                        >
+                            Local Network setup
+                        </button>
+                    )}
                 </div>
                 {onGoToNetworkSettings && (
                     <button

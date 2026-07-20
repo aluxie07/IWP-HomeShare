@@ -3,12 +3,17 @@ import { useEffect, useState } from "react";
 function Header({
     currentPage,
     isLoggedIn,
+    apiMode,
+    apiConnected,
     onLogoClick,
     onHomeClick,
     onDashboardClick,
     onUploadClick,
     onLibraryClick,
     onSettingsClick,
+    onHelpClick,
+    onExitLocalMode,
+    exitingLocalMode,
     showSettings,
     onGetStarted,
     showGetStarted,
@@ -44,16 +49,49 @@ function Header({
         handler?.();
     };
 
+    const isLocalMode =
+        apiConnected && (apiMode === "local" || apiMode === "manual");
+    const modeLabel = isLocalMode
+        ? "Local"
+        : apiMode === "cloud"
+          ? "Cloud"
+          : apiMode === "detecting"
+            ? "…"
+            : "Cloud";
+
     return (
         <header className={`site-header ${menuOpen ? "site-header--menu-open" : ""}`}>
             <div className="header-bar">
-                <button type="button" className="header-logo-btn" onClick={onLogoClick}>
-                    <img
-                        src={`${process.env.PUBLIC_URL}/HomeShareLogo.png`}
-                        alt="HomeShare logo"
-                        className="header-logo"
-                    />
-                </button>
+                <div className="header-brand">
+                    <button type="button" className="header-logo-btn" onClick={onLogoClick}>
+                        <img
+                            src={`${process.env.PUBLIC_URL}/HomeShareLogo.png`}
+                            alt="HomeShare logo"
+                            className="header-logo"
+                        />
+                    </button>
+                    <span
+                        className={`header-mode-badge ${
+                            isLocalMode
+                                ? "header-mode-badge--local"
+                                : "header-mode-badge--cloud"
+                        }`}
+                        title={isLocalMode ? "Local Network Mode" : "Cloud mode"}
+                    >
+                        {modeLabel}
+                    </span>
+                    {isLocalMode && onExitLocalMode && (
+                        <button
+                            type="button"
+                            className="header-mode-exit"
+                            onClick={onExitLocalMode}
+                            disabled={exitingLocalMode}
+                            title="Switch back to cloud API"
+                        >
+                            {exitingLocalMode ? "…" : "Exit local"}
+                        </button>
+                    )}
+                </div>
 
                 <nav className="header-desktop-nav" aria-label="Main">
                     <button
@@ -111,6 +149,15 @@ function Header({
                             )}
                         </>
                     )}
+                    <button
+                        type="button"
+                        className={`header-nav-link ${
+                            currentPage === "help" ? "header-nav-link--active" : ""
+                        }`}
+                        onClick={onHelpClick}
+                    >
+                        Help
+                    </button>
                     {!isLoggedIn && showGetStarted && (
                         <button type="button" className="get-started-btn" onClick={onGetStarted}>
                             Get Started
@@ -200,6 +247,15 @@ function Header({
                         )}
                     </>
                 )}
+                <button
+                    type="button"
+                    className={`header-nav-link ${
+                        currentPage === "help" ? "header-nav-link--active" : ""
+                    }`}
+                    onClick={runAndClose(onHelpClick)}
+                >
+                    Help
+                </button>
                 {!isLoggedIn && showGetStarted && (
                     <button
                         type="button"

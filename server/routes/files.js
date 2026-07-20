@@ -316,14 +316,10 @@ router.post(
             }
 
             res.status(201).json({
-                message:
-                    storageKind === "disk"
-                        ? `File saved on this PC (${path.basename(storagePath || storedFilename)}). Library info is stored in MongoDB.`
-                        : "File uploaded successfully",
+                message: "File uploaded successfully",
                 file: formatFile(record),
                 storageMode: storageKind,
                 storageScope: getStorageScope(record),
-                diskPath: storageKind === "disk" ? storagePath : null,
             });
         } catch (err) {
             if (req.file?.path && fs.existsSync(req.file.path)) {
@@ -532,14 +528,10 @@ router.post("/files/upload/:uploadId/complete", authMiddleware, requireMongo, as
         }
 
         res.status(201).json({
-            message:
-                storageKind === "disk"
-                    ? `File saved on this PC (${path.basename(storagePath || storedFilename)}). Library info is stored in MongoDB.`
-                    : "File uploaded successfully",
+            message: "File uploaded successfully",
             file: formatFile(record),
             storageMode: storageKind,
             storageScope: getStorageScope(record),
-            diskPath: storageKind === "disk" ? storagePath : null,
         });
     } catch (err) {
         console.error("[HomeShare] Upload complete failed:", err.message);

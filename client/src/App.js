@@ -16,8 +16,8 @@ import FileLibrary from "./pages/FileLibrary";
 import SharedFile from "./pages/SharedFile";
 import NetworkSettings from "./pages/NetworkSettings";
 import LocalNetworkSetup from "./pages/LocalNetworkSetup";
-import LocalNetworkBanner from "./components/LocalNetworkBanner";
-import { initApiDiscovery } from "./utils/apiDiscovery";
+import Help from "./pages/Help";
+import { initApiDiscovery, switchToCloudApi } from "./utils/apiDiscovery";
 import {
     isLoggedIn as hasStoredAuth,
     clearAuth,
@@ -81,6 +81,7 @@ function App() {
         url: "",
         connected: false,
     });
+    const [exitingLocalMode, setExitingLocalMode] = useState(false);
 
     useEffect(() => {
         initApiDiscovery().then((result) => {
@@ -177,15 +178,11 @@ function App() {
 
     return (
         <div className="App">
-            <LocalNetworkBanner
-                apiMode={apiDiscovery.mode}
-                apiUrl={apiDiscovery.url}
-                connected={apiDiscovery.connected}
-                onOpenSetup={() => setPage("local-network-setup")}
-            />
             <Header
                 currentPage={page}
                 isLoggedIn={isLoggedIn}
+                apiMode={apiDiscovery.mode}
+                apiConnected={apiDiscovery.connected}
                 onLogoClick={() => setPage("home")}
                 onHomeClick={() => setPage("home")}
                 onDashboardClick={() => {
@@ -216,6 +213,23 @@ function App() {
                     }
                     setPage("network-settings");
                 }}
+                onHelpClick={() => setPage("help")}
+                onExitLocalMode={async () => {
+                    setExitingLocalMode(true);
+                    try {
+                        const result = await switchToCloudApi();
+                        setApiDiscovery({
+                            mode: result.mode,
+                            url: result.url,
+                            connected: result.connected,
+                        });
+                    } catch {
+                        // keep current mode if cloud switch fails
+                    } finally {
+                        setExitingLocalMode(false);
+                    }
+                }}
+                exitingLocalMode={exitingLocalMode}
                 showSettings={isLoggedIn}
                 onGetStarted={() => setPage("register")}
                 showGetStarted={!isLoggedIn}
@@ -233,6 +247,12 @@ function App() {
                     />
                 )}
                 {page === "credits" && <Credits onBack={() => setPage("home")} />}
+                {page === "help" && (
+                    <Help
+                        onBack={() => setPage(isLoggedIn ? "dashboard" : "home")}
+                        onOpenLocalSetup={() => setPage("local-network-setup")}
+                    />
+                )}
                 {page === "login" && (
                     <Login
                         onLoginSuccess={handleLoginSuccess}
@@ -242,7 +262,7 @@ function App() {
                             setApiDiscovery({
                                 mode: result.mode,
                                 url: result.url,
-                                ready: true,
+                                connected: result.connected,
                             });
                         }}
                     />
@@ -279,6 +299,7 @@ function App() {
                         onGoToUpload={() => setPage("upload")}
                         onGoToLibrary={() => setPage("library")}
                         onGoToNetworkSettings={() => setPage("network-settings")}
+                        onGoToLocalSetup={() => setPage("local-network-setup")}
                     />
                 )}
                 {page === "network-settings" && (
@@ -327,7 +348,10 @@ function App() {
                     />
                 )}
             </main>
-            <Footer onCreditsClick={() => setPage("credits")} />
+            <Footer
+                onCreditsClick={() => setPage("credits")}
+                onHelpClick={() => setPage("help")}
+            />
         </div>
     );
 }

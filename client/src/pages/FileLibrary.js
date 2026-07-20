@@ -503,9 +503,6 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                     >
                                         {getStorageScopeLabel(scope)}
                                     </span>
-                                    {scope === "local"
-                                        ? " — on this PC’s HomeShare folder"
-                                        : " — in cloud storage (Render / Atlas)"}
                                 </p>
                                 );
                             })()}
