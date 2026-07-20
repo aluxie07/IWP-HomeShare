@@ -191,10 +191,12 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
                 onRedirectToLogin,
             });
 
-            const scope = data.file?.storageScope;
             setStatus(
-                scope
-                    ? `Uploaded to ${getStorageScopeLabel(scope).toLowerCase()} storage.`
+                data.storageScope === "local" || data.storageMode === "disk"
+                    ? data.message ||
+                          `Saved on this PC${
+                              data.diskPath ? ` (${data.diskPath})` : ""
+                          }. Library entry is in MongoDB.`
                     : data.message || "File uploaded successfully"
             );
             setIsError(false);

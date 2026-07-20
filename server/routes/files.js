@@ -98,6 +98,10 @@ function formatFile(file) {
         accessMode: normalizeAccessMode(file.accessMode),
         storageKind: file.storageKind || null,
         storageScope: getStorageScope(file),
+        storagePath:
+            getStorageScope(file) === "local" && file.storagePath
+                ? path.basename(String(file.storagePath))
+                : null,
         uploadedBy:
             file.uploadedByUsername ||
             ownerDoc?.username ||
@@ -307,9 +311,19 @@ router.post(
                 });
             }
 
+            if (storageKind === "disk") {
+                console.log(`[HomeShare] Upload stored on disk: ${storagePath}`);
+            }
+
             res.status(201).json({
-                message: "File uploaded successfully",
+                message:
+                    storageKind === "disk"
+                        ? `File saved on this PC (${path.basename(storagePath || storedFilename)}). Library info is stored in MongoDB.`
+                        : "File uploaded successfully",
                 file: formatFile(record),
+                storageMode: storageKind,
+                storageScope: getStorageScope(record),
+                diskPath: storageKind === "disk" ? storagePath : null,
             });
         } catch (err) {
             if (req.file?.path && fs.existsSync(req.file.path)) {
@@ -513,9 +527,19 @@ router.post("/files/upload/:uploadId/complete", authMiddleware, requireMongo, as
             });
         }
 
+        if (storageKind === "disk") {
+            console.log(`[HomeShare] Upload stored on disk: ${storagePath}`);
+        }
+
         res.status(201).json({
-            message: "File uploaded successfully",
+            message:
+                storageKind === "disk"
+                    ? `File saved on this PC (${path.basename(storagePath || storedFilename)}). Library info is stored in MongoDB.`
+                    : "File uploaded successfully",
             file: formatFile(record),
+            storageMode: storageKind,
+            storageScope: getStorageScope(record),
+            diskPath: storageKind === "disk" ? storagePath : null,
         });
     } catch (err) {
         console.error("[HomeShare] Upload complete failed:", err.message);
