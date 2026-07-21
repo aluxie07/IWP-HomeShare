@@ -2,6 +2,8 @@ import {
     getCloudApiUrl,
     getDiscoveredApiUrl,
     buildApiFetchOptions,
+    isHttpsPage,
+    isLocalOrPrivateApiUrl,
 } from "./apiDiscovery";
 import {
     getActiveApiSlot,
@@ -39,21 +41,42 @@ export function authHeadersFor(slot, extra = {}) {
     return headers;
 }
 
-export function getNetworkErrorMessage(err) {
-    if (err?.name === "AbortError") {
+function isNetworkFetchError(err) {
+    if (!err) return false;
+    if (err.name === "AbortError" || err.name === "TimeoutError") return true;
+    if (err instanceof TypeError) return true;
+    return /Failed to fetch|NetworkError|Load failed|aborted|timeout/i.test(
+        String(err.message || err)
+    );
+}
+
+export function getNetworkErrorMessage(err, baseUrl = getApiUrl()) {
+    if (err?.name === "AbortError" || err?.name === "TimeoutError") {
         return (
             "Request timed out. On Render free tier the server may be waking up—wait 30 seconds and try again."
         );
     }
 
-    if (err instanceof TypeError) {
-        return `Cannot reach the API at ${getApiUrl()}. For Local Network Mode, start the server on this PC (see Local setup) and Detect again. Otherwise confirm REACT_APP_API_URL points to your Render URL.`;
+    if (
+        err instanceof TypeError ||
+        /Failed to fetch|NetworkError|Load failed/i.test(String(err?.message || ""))
+    ) {
+        if (isLocalOrPrivateApiUrl(baseUrl)) {
+            return `Cannot reach the local API at ${baseUrl}. Start the local server on this PC and Detect again.`;
+        }
+        return `Cannot reach the API at ${baseUrl}. For Local Network Mode, start the server on this PC (see Local setup) and Detect again. Otherwise confirm REACT_APP_API_URL points to your Render URL.`;
     }
 
     return "Could not reach server. Is the backend running?";
 }
 
-async function fetchAgainstBase(baseUrl, path, options = {}, slot = null) {
+async function fetchAgainstBaseOnce(
+    baseUrl,
+    path,
+    options = {},
+    slot = null,
+    useAddressSpace = true
+) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     const base = String(baseUrl || "").replace(/\/$/, "");
@@ -64,7 +87,9 @@ async function fetchAgainstBase(baseUrl, path, options = {}, slot = null) {
             ? authHeadersFor(slot, optionHeaders || {})
             : authHeaders(optionHeaders || {});
 
-        const probeHints = buildApiFetchOptions(base, REQUEST_TIMEOUT_MS);
+        const probeHints = buildApiFetchOptions(base, REQUEST_TIMEOUT_MS, {
+            useAddressSpace,
+        });
         const { signal: _probeSignal, ...fetchHints } = probeHints;
 
         return await fetch(`${base}${path}`, {
@@ -76,6 +101,33 @@ async function fetchAgainstBase(baseUrl, path, options = {}, slot = null) {
         });
     } finally {
         clearTimeout(timeoutId);
+    }
+}
+
+async function fetchAgainstBase(baseUrl, path, options = {}, slot = null) {
+    const base = String(baseUrl || "").replace(/\/$/, "");
+    const tryPnaFallback = isHttpsPage() && isLocalOrPrivateApiUrl(base);
+
+    try {
+        return await fetchAgainstBaseOnce(base, path, options, slot, true);
+    } catch (err) {
+        if (tryPnaFallback && isNetworkFetchError(err)) {
+            try {
+                return await fetchAgainstBaseOnce(base, path, options, slot, false);
+            } catch (retryErr) {
+                const wrapped = new Error(getNetworkErrorMessage(retryErr, base));
+                wrapped.cause = retryErr;
+                wrapped.isNetworkError = true;
+                throw wrapped;
+            }
+        }
+        if (isNetworkFetchError(err)) {
+            const wrapped = new Error(getNetworkErrorMessage(err, base));
+            wrapped.cause = err;
+            wrapped.isNetworkError = true;
+            throw wrapped;
+        }
+        throw err;
     }
 }
 
@@ -94,7 +146,9 @@ export async function fetchCloud(path, options = {}) {
 export async function fetchLocal(path, options = {}) {
     const base = getApiUrlForSlot("local");
     if (!base) {
-        throw new Error("Local API URL is not available — Detect the local server first");
+        throw new Error(
+            "Local API URL is not available — Detect the local server first"
+        );
     }
     return fetchAgainstBase(base, path, options, "local");
 }

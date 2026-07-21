@@ -54,6 +54,23 @@ async function fetchFilesFromSlot(slot) {
         return { files: [], note: "" };
     }
 
+    // Always load /files first so Library works even if folder sync is slow/hangs
+    // (e.g. right after a large local disk upload).
+    const res = await fetchForSlot(slot, "/files", { cache: "no-store" });
+    if (res.status === 401) {
+        const err = new Error("Unauthorized");
+        err.status = 401;
+        err.slot = slot;
+        throw err;
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw new Error(data.message || `Could not load ${slot} files`);
+    }
+
+    let files = tagFilesForSource(data.files || [], slot);
+    let note = "";
+
     if (slot === "local") {
         try {
             const syncRes = await fetchForSlot(slot, "/files/sync-folder", {
@@ -68,34 +85,18 @@ async function fetchFilesFromSlot(slot) {
             }
             const syncData = await syncRes.json().catch(() => ({}));
             if (syncRes.ok && Array.isArray(syncData.files)) {
-                return {
-                    files: tagFilesForSource(syncData.files, slot),
-                    note: syncData.skipped ? "" : syncData.message || "",
-                };
+                files = tagFilesForSource(syncData.files, slot);
+                note = syncData.skipped ? "" : syncData.message || "";
             }
         } catch (err) {
             if (err.status === 401) {
                 throw err;
             }
-            // Fall through to plain /files
+            // Keep the /files result; sync is best-effort
         }
     }
 
-    const res = await fetchForSlot(slot, "/files", { cache: "no-store" });
-    if (res.status === 401) {
-        const err = new Error("Unauthorized");
-        err.status = 401;
-        err.slot = slot;
-        throw err;
-    }
-    const data = await res.json();
-    if (!res.ok) {
-        throw new Error(data.message || `Could not load ${slot} files`);
-    }
-    return {
-        files: tagFilesForSource(data.files || [], slot),
-        note: "",
-    };
+    return { files, note };
 }
 
 /**
@@ -113,18 +114,26 @@ export async function fetchMergedLibrarySnapshot() {
 
         const lists = [];
         let unauthorizedSlot = null;
+        let cloudOk = false;
+        let localOk = false;
 
         results.forEach((result, index) => {
             const slot = index === 0 ? "cloud" : "local";
             if (result.status === "fulfilled") {
                 lists.push(result.value.files);
+                if (slot === "cloud") cloudOk = true;
+                if (slot === "local") localOk = true;
                 if (result.value.note) {
                     notes.push(result.value.note);
                 }
             } else if (result.reason?.status === 401) {
                 unauthorizedSlot = slot;
             } else if (result.reason?.message) {
-                notes.push(`${slot}: ${result.reason.message}`);
+                notes.push(
+                    slot === "local"
+                        ? `Local unreachable — start the local server and Detect again (${result.reason.message})`
+                        : `Cloud: ${result.reason.message}`
+                );
             }
         });
 
@@ -135,12 +144,23 @@ export async function fetchMergedLibrarySnapshot() {
             throw err;
         }
 
-        notes.unshift("Showing cloud + local libraries (same email)");
+        if (cloudOk && localOk) {
+            notes.unshift("Showing cloud + local libraries (same email)");
+        } else if (cloudOk && !localOk) {
+            notes.unshift(
+                "Showing cloud library only — local session is linked but the local server is not reachable"
+            );
+        } else if (!cloudOk && localOk) {
+            notes.unshift(
+                "Showing local library only — cloud session is linked but the cloud API is not reachable"
+            );
+        }
+
         return {
             files: mergeAndSortFiles(lists),
             note: notes.filter(Boolean).join(" · "),
             linkStatus,
-            merged: true,
+            merged: cloudOk && localOk,
         };
     }
 

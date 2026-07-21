@@ -69,14 +69,24 @@ export function getApiUrlForSlot(slot) {
     if (slot === "cloud") {
         return (getCloudApiUrl() || "").replace(/\/$/, "");
     }
+
+    const mode = getApiMode();
+    // When Local/Detect is active, always use the same URL as uploads (getApiUrl).
+    // Preferring a stale homeshare_local_api_url caused "Failed to fetch" in Library
+    // right after a successful local upload.
+    if (mode === "local" || mode === "manual") {
+        const active = (getDiscoveredApiUrl() || "").replace(/\/$/, "");
+        if (active) {
+            setStoredLocalApiUrl(active);
+            return active;
+        }
+    }
+
     const stored = getStoredLocalApiUrl();
     if (stored) {
         return stored;
     }
-    const mode = getApiMode();
-    if (mode === "local" || mode === "manual") {
-        return getDiscoveredApiUrl();
-    }
+
     return "http://127.0.0.1:8080";
 }
 

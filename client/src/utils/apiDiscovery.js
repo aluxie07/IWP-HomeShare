@@ -130,14 +130,18 @@ function buildProbeOptions(baseUrl, { useAddressSpace = true } = {}) {
 }
 
 /** Shared fetch options for LAN/local API calls from HTTPS GitHub Pages */
-export function buildApiFetchOptions(baseUrl, timeoutMs = probeTimeoutMs(baseUrl)) {
+export function buildApiFetchOptions(
+    baseUrl,
+    timeoutMs = probeTimeoutMs(baseUrl),
+    { useAddressSpace = true } = {}
+) {
     const options = {
         mode: "cors",
         cache: "no-store",
         signal: AbortSignal.timeout(timeoutMs),
     };
 
-    if (!isHttpsPage()) {
+    if (!isHttpsPage() || !useAddressSpace) {
         return options;
     }
 
@@ -157,6 +161,19 @@ export function buildApiFetchOptions(baseUrl, timeoutMs = probeTimeoutMs(baseUrl
 
     return options;
 }
+
+export function isLocalOrPrivateApiUrl(baseUrl) {
+    if (isLoopbackUrl(baseUrl)) {
+        return true;
+    }
+    try {
+        return isPrivateLanHost(new URL(baseUrl).hostname);
+    } catch {
+        return false;
+    }
+}
+
+export { isHttpsPage, isLoopbackUrl };
 
 /**
  * Probe a base URL. Returns { ok, error } so Detect can show a useful message.
