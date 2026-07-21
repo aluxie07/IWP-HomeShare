@@ -1,0 +1,39 @@
+Section	Type	Question	Options	Required	HelpText
+Unit	SECTION	A. Unit questions		FALSE	Answer Yes / Partially / No for each item you tried. Use Partially if you only partly completed it.
+Unit	MULTIPLE_CHOICE	1. When registering or resetting a password: weak passwords were rejected and a valid password was accepted.	Yes|Partially|No	TRUE	Assesses Unit case 1
+Unit	MULTIPLE_CHOICE	2. I could tell Private / Shared / Local Only apart and Private did not let me create a share link.	Yes|Partially|No	TRUE	Assesses Unit case 2
+Unit	MULTIPLE_CHOICE	3. Cloud/Local badges and the All/Cloud/Local filters matched what I expected for my files.	Yes|Partially|No	TRUE	Assesses Unit case 3
+Unit	MULTIPLE_CHOICE	4. The header badge correctly showed Cloud or Local and Exit local only appeared in Local mode.	Yes|Partially|No	TRUE	Assesses Unit case 4
+Unit	MULTIPLE_CHOICE	5. The Help page explained Cloud vs Local clearly and I could open Local Network setup from Help.	Yes|Partially|No	TRUE	Assesses Unit case 5
+Unit	MULTIPLE_CHOICE	6. I understood that inactivity on HomeShare can log me out (about 15 minutes).	Yes|Partially|No	TRUE	Assesses Unit case 6
+Integration	SECTION	B. Integration questions		FALSE	Answer Yes / Partially / No for each item you tried.
+Integration	MULTIPLE_CHOICE	1. I logged in on Cloud without needing a local server or Detect.	Yes|Partially|No	TRUE	Assesses Integration case 1
+Integration	MULTIPLE_CHOICE	2. On the host PC Detect put me into Local mode (header showed Local).	Yes|Partially|No	TRUE	Assesses Integration case 2
+Integration	MULTIPLE_CHOICE	3. Exit local returned me to Cloud mode successfully.	Yes|Partially|No	TRUE	Assesses Integration case 3
+Integration	MULTIPLE_CHOICE	4. While in Local mode my upload appeared in the library as a Local file.	Yes|Partially|No	TRUE	Assesses Integration case 4
+Integration	MULTIPLE_CHOICE	5. While in Cloud mode my upload appeared as Cloud and I could download it.	Yes|Partially|No	TRUE	Assesses Integration case 5
+Integration	MULTIPLE_CHOICE	6. I could copy a LAN address (http://192.168.x.x:8080) for another device.	Yes|Partially|No	TRUE	Assesses Integration case 6
+Integration	MULTIPLE_CHOICE	7. I could register the trusted network on Local Wi-Fi (or saw it already registered).	Yes|Partially|No	TRUE	Assesses Integration case 7
+Integration	MULTIPLE_CHOICE	8. Share links worked for Shared files and were not available for Private files.	Yes|Partially|No	TRUE	Assesses Integration case 8
+Integration	MULTIPLE_CHOICE	9. After deleting a file a deletion log showed who uploaded and who deleted it.	Yes|Partially|No	TRUE	Assesses Integration case 9
+Integration	MULTIPLE_CHOICE	10. From the Dashboard Local Network setup opened the correct setup page.	Yes|Partially|No	TRUE	Assesses Integration case 10
+End-to-end	SECTION	C. End-to-end questions		FALSE	Answer Yes / Partially / No for each item you tried.
+End-to-end	MULTIPLE_CHOICE	1. I completed cloud register → activate → login → upload → library → download without a local server.	Yes|Partially|No	TRUE	Assesses End-to-end case 1
+End-to-end	MULTIPLE_CHOICE	2. I completed local setup from Dashboard → Detect → upload → saw Local → downloaded the file.	Yes|Partially|No	TRUE	Assesses End-to-end case 2
+End-to-end	MULTIPLE_CHOICE	3. A second device connected using the LAN URL (not Detect) and could use the library.	Yes|Partially|No	TRUE	Assesses End-to-end case 3
+End-to-end	MULTIPLE_CHOICE	4. I switched between Local and Cloud in one session without the site breaking.	Yes|Partially|No	TRUE	Assesses End-to-end case 4
+End-to-end	MULTIPLE_CHOICE	5. A Local Only file worked on the registered Wi-Fi and was blocked when not on that trusted network (or I could not complete this — answer No).	Yes|Partially|No	TRUE	Assesses End-to-end case 5
+End-to-end	MULTIPLE_CHOICE	6. Network admin could change settings; a non-admin on the same Wi-Fi could not (or N/A → Partially with comment).	Yes|Partially|No	TRUE	Assesses End-to-end case 6
+End-to-end	MULTIPLE_CHOICE	7. I created a share link opened it in another browser then revoked it and access stopped.	Yes|Partially|No	TRUE	Assesses End-to-end case 7
+End-to-end	MULTIPLE_CHOICE	8. After about 15 minutes without using HomeShare I was logged out (or I did not wait — answer Partially and note).	Yes|Partially|No	TRUE	Assesses End-to-end case 8
+End-to-end	MULTIPLE_CHOICE	9. When I had (or imagined) both Cloud and Local files badges/filters helped me tell them apart.	Yes|Partially|No	TRUE	Assesses End-to-end case 9
+End-to-end	MULTIPLE_CHOICE	10. Overall I could finish the assigned HomeShare scenarios without getting permanently stuck.	Yes|Partially|No	TRUE	Assesses End-to-end case 10
+Evidence	SECTION	D. Evidence and overall		FALSE	Extra questions for marking evidence. Not every item needs a Pass/Fail.
+Evidence	SCALE	1. Overall HomeShare felt usable for class/home file sharing.	1|5	TRUE	1 = not usable. 5 = very usable. Supports End-to-end case 10
+Evidence	MULTIPLE_CHOICE	2. Which modes did you successfully use?	Cloud only|Local only|Both|Blocked / could not use	TRUE	
+Evidence	MULTIPLE_CHOICE	3. What was hardest?	Login/account|Local setup/Detect|Upload/download|Sharing|Network registration|Badges/filters|Nothing major	TRUE	
+Evidence	PARAGRAPH	4. If you answered No to any question above list the section and question number and what went wrong.		FALSE	
+Evidence	PARAGRAPH	5. Which 1-3 tasks worked best? List section + question number or a short description.		FALSE	
+Evidence	TEXT	6. Device + browser used (example: Windows 11 + Chrome; phone + Safari).		TRUE	
+Evidence	MULTIPLE_CHOICE	7. Modes you actually tested:	Cloud|Local|Both	TRUE	
+Evidence	PARAGRAPH	8. One improvement you would make first.		FALSE	

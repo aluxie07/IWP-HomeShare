@@ -11,29 +11,30 @@ function Help({ onBack, onOpenLocalSetup }) {
 
                 <p className="files-page-intro">
                     HomeShare lets you share files with people on the same Wi‑Fi or through the
-                    cloud site. This page explains the main modes and features.
+                    cloud site. This page explains the core features.
                 </p>
 
                 <div className="help-section">
                     <h3 className="files-section-title">Cloud mode</h3>
                     <p className="files-muted">
-                        The website talks to the online server (Render). You can log in, upload,
+                        Cloud mode allows you to upload files online.. You can log in, upload, and manage files from anywhere with internet. File contents are stored in the cloud. Use this when you are not running a local server.
                         and manage files from anywhere with internet. File contents are stored in
-                        the cloud. Use this when you are not running a local server.
+                        the cloud.
                     </p>
                 </div>
 
                 <div className="help-section">
                     <h3 className="files-section-title">Local Network Mode</h3>
                     <p className="files-muted">
-                        The website connects to a HomeShare server on a PC on your Wi‑Fi. Uploads
-                        on that connection are kept on the host PC’s HomeShare folder. Other
+                        The website connects to a HomeShare server on a PC on your Wi‑Fi. To set up a free server, follow the steps below. Uploads
+                        on that server are kept on the host PC’s HomeShare folder. Other
                         devices on the same Wi‑Fi can connect with the host’s LAN address (for
                         example <code>http://192.168.x.x:8080</code>).
                     </p>
                     <ol className="local-setup-join-steps">
-                        <li>Download and run the local package on the host PC</li>
-                        <li>On that PC, open Local Network Mode and click Detect</li>
+                        <li>Create a MongoDB account and create a new cluster for free. Click connect, then drivers and copy the connection string, replacing dbpassword with your cluster password. </li>
+                        <li>Download and run the local package as an administrator on the host PC. Follow the setup instructions and wait until you see "MongoDB connected". </li>
+                        <li>On that PC, open Local Network Mode on the HomeShare website and click Detect</li>
                         <li>Copy the LAN address for phones or other PCs</li>
                         <li>Register your Wi‑Fi under Network settings (first person becomes admin)</li>
                     </ol>
@@ -43,7 +44,7 @@ function Help({ onBack, onOpenLocalSetup }) {
                             className="auth-form__secondary-btn"
                             onClick={onOpenLocalSetup}
                         >
-                            Open Local Network setup
+                            Open Local Mode setup
                         </button>
                     )}
                 </div>
@@ -88,10 +89,10 @@ function Help({ onBack, onOpenLocalSetup }) {
                 <div className="help-section">
                     <h3 className="files-section-title">Trusted network</h3>
                     <p className="files-muted">
-                        The first person to register a Wi‑Fi subnet becomes the network admin.
+                        The first person to register a Wi‑Fi network becomes the network admin.
                         Others on that network can use shared files for that network. A different
-                        Wi‑Fi (different subnet) needs its own registration. Register from Local
-                        Network Mode — the cloud site cannot see your home Wi‑Fi address.
+                        Wi‑Fi network needs its own registration. Register from Local
+                        Network Mode, as the cloud site cannot see your home Wi‑Fi address.
                     </p>
                 </div>
 
@@ -103,7 +104,7 @@ function Help({ onBack, onOpenLocalSetup }) {
                         <li>Deleted files keep a short history entry (who uploaded / deleted)</li>
                         <li>
                             On Windows, other PCs may open the shared folder{" "}
-                            <code>\\HOST-IP\HomeShare</code> (may ask for Windows sign-in)
+                            <code>\\HOST-IP\HomeShare</code> (may ask for Windows sign-in), recommended for users other than the host to use the website's file library instead.
                         </li>
                     </ul>
                 </div>
