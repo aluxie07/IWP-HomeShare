@@ -8,6 +8,8 @@ const { isInternalWrite, markInternalWrite } = require("./explorerSync");
 const { getLastSyncOwnerId } = require("./syncOwner");
 const { guessMime, shouldSkipName } = require("./explorerReconcile");
 
+const FOLDER_UPLOAD_LABEL = "Explorer (folder)";
+
 function shouldSkip(filePath) {
     const base = path.basename(filePath);
     if (shouldSkipName(base)) {
@@ -19,6 +21,7 @@ function shouldSkip(filePath) {
     return false;
 }
 
+/** ACL owner for anonymous folder drops only — never used as upload/delete credit. */
 async function resolveSyncOwner() {
     const lastId = getLastSyncOwnerId();
     if (lastId) {
@@ -101,7 +104,8 @@ async function onFileAdded(filePath) {
         filename: basename,
         storedFilename: basename,
         owner: owner._id,
-        uploadedByUsername: owner.username,
+        // Do not credit the last logged-in / admin user as the uploader
+        uploadedByUsername: FOLDER_UPLOAD_LABEL,
         fileSize: stats.size,
         fileType: guessMime(basename),
         storageKind: "disk",
@@ -110,7 +114,7 @@ async function onFileAdded(filePath) {
     });
 
     console.log(
-        `[HomeShare] Explorer → server: imported "${basename}" for ${owner.username}`
+        `[HomeShare] Explorer → server: imported "${basename}" (folder drop; ACL owner ${owner.username})`
     );
 }
 
@@ -125,12 +129,23 @@ async function onFileRemoved(filePath) {
     }
 
     const { softDeleteFile } = require("./softDeleteFile");
-    const actor = await resolveSyncOwner();
+
+    let deletedByUsername = FOLDER_UPLOAD_LABEL;
+    let userId = existing.owner || null;
+
+    if (existing.owner) {
+        const ownerDoc = await User.findById(existing.owner).select("username");
+        if (ownerDoc?.username) {
+            // File was removed from the shared folder — credit the file owner,
+            // not whoever last used the website / admin email.
+            deletedByUsername = `${ownerDoc.username} (folder)`;
+            userId = ownerDoc._id;
+        }
+    }
+
     await softDeleteFile(existing, {
-        userId: actor?._id || existing.owner,
-        username: actor
-            ? `${actor.username} (folder)`
-            : "Explorer (folder)",
+        userId,
+        username: deletedByUsername,
     });
     console.log(
         `[HomeShare] Explorer → server: soft-deleted "${existing.filename}" (removed from folder)`
@@ -193,4 +208,5 @@ function startExplorerWatcher() {
 
 module.exports = {
     startExplorerWatcher,
+    FOLDER_UPLOAD_LABEL,
 };

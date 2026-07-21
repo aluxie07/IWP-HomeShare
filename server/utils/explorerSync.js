@@ -9,7 +9,8 @@ function markInternalWrite(filePath) {
     if (!filePath) {
         return;
     }
-    ignoreUntil.set(path.resolve(filePath), Date.now() + 4000);
+    // Long enough to cover Windows polling + upload/delete races
+    ignoreUntil.set(path.resolve(filePath), Date.now() + 15000);
 }
 
 function isInternalWrite(filePath) {

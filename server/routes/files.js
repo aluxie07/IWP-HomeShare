@@ -43,6 +43,7 @@ const {
     ACCESS_MODES,
 } = require("../utils/fileAccess");
 const { softDeleteFile, isFileDeleted } = require("../utils/softDeleteFile");
+const { setLastSyncOwnerId } = require("../utils/syncOwner");
 
 const router = express.Router();
 const CHUNK_BODY_LIMIT = DEFAULT_CHUNK_SIZE + 1024 * 1024;
@@ -223,6 +224,8 @@ router.post(
             if (!req.file) {
                 return res.status(400).json({ message: "No file provided" });
             }
+
+            setLastSyncOwnerId(req.user.id);
 
             const storedFilename =
                 req.file.filename || makeStoredFilename(req.file.originalname);
@@ -442,6 +445,8 @@ router.put(
 
 router.post("/files/upload/:uploadId/complete", authMiddleware, requireMongo, async (req, res) => {
     try {
+        setLastSyncOwnerId(req.user.id);
+
         const session = getUploadSession(req.params.uploadId, req.user.id);
         if (!session) {
             return res.status(404).json({ message: "Upload session not found or expired" });
@@ -555,12 +560,16 @@ router.get("/files", authMiddleware, async (req, res) => {
 
 router.post("/files/sync-folder", authMiddleware, requireMongo, async (req, res) => {
     try {
+        setLastSyncOwnerId(req.user.id);
+
         if (!shouldUseDisk()) {
+            const files = await loadLibraryFiles(req.user.id, currentNetworkId(req));
             return res.status(200).json({
-                message: "Folder sync is only available in local disk mode",
+                message: "Library refreshed",
                 imported: 0,
                 removed: 0,
                 skipped: true,
+                files,
             });
         }
 

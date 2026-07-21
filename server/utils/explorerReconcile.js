@@ -13,6 +13,8 @@ const IGNORE_NAMES = new Set([
     ".ds_store",
 ]);
 
+const FOLDER_UPLOAD_LABEL = "Explorer (folder)";
+
 function guessMime(filename) {
     const ext = path.extname(filename || "").toLowerCase();
     const map = {
@@ -46,9 +48,17 @@ function shouldSkipName(base) {
     return IGNORE_NAMES.has(base.toLowerCase());
 }
 
+function isUnderDir(filePath, dir) {
+    const resolved = path.resolve(filePath);
+    return resolved === dir || resolved.startsWith(dir + path.sep);
+}
+
 /**
  * Import disk files into Mongo for this owner, and soft-delete DB rows whose
  * Explorer files were deleted. Used by Refresh and the folder watcher.
+ *
+ * Fast path: one directory listing, one File query, batched owner lookup,
+ * insertMany for new files — no per-file findOne.
  */
 async function reconcileExplorerFolder(ownerId, networkId = null) {
     if ((process.env.FILE_STORAGE || "").trim().toLowerCase() !== "disk") {
@@ -59,96 +69,123 @@ async function reconcileExplorerFolder(ownerId, networkId = null) {
     fs.mkdirSync(filesDir, { recursive: true });
     const resolvedDir = path.resolve(filesDir);
 
-    const onDisk = fs
-        .readdirSync(resolvedDir, { withFileTypes: true })
-        .filter((d) => d.isFile() && !shouldSkipName(d.name))
-        .map((d) => {
-            const full = path.resolve(resolvedDir, d.name);
-            const stats = fs.statSync(full);
-            return {
-                name: d.name,
-                full,
-                size: stats.size,
-            };
+    let dirents;
+    try {
+        dirents = fs.readdirSync(resolvedDir, { withFileTypes: true });
+    } catch (err) {
+        console.warn(`[HomeShare] Folder sync readdir failed: ${err.message}`);
+        return { imported: 0, removed: 0, skipped: false, filesDir: resolvedDir };
+    }
+
+    const onDisk = [];
+    for (const d of dirents) {
+        if (!d.isFile() || shouldSkipName(d.name)) {
+            continue;
+        }
+        onDisk.push({
+            name: d.name,
+            full: path.resolve(resolvedDir, d.name),
         });
+    }
 
     const diskPaths = new Set(onDisk.map((f) => f.full));
 
-    const ownerFiles = await File.find({
-        owner: ownerId,
+    const diskRecords = await File.find({
         storageKind: "disk",
         deletedAt: null,
     });
 
-    const actor = await User.findById(ownerId).select("username");
-    const actorName = actor?.username || "Unknown";
+    const knownPaths = new Set();
+    const knownNames = new Set();
+    for (const file of diskRecords) {
+        if (file.storagePath) {
+            knownPaths.add(path.resolve(file.storagePath));
+        }
+        if (file.storedFilename) {
+            knownNames.add(file.storedFilename);
+        }
+    }
 
-    let removed = 0;
-    for (const file of ownerFiles) {
+    const toRemove = [];
+    for (const file of diskRecords) {
         const stored = file.storagePath
             ? path.resolve(file.storagePath)
             : path.resolve(resolvedDir, file.storedFilename || "");
 
-        const inExplorer =
-            stored.startsWith(resolvedDir + path.sep) || stored === resolvedDir;
-
-        if (!inExplorer) {
+        if (!isUnderDir(stored, resolvedDir)) {
             continue;
         }
 
-        if (!diskPaths.has(stored) && !fs.existsSync(stored)) {
+        if (!diskPaths.has(stored)) {
+            toRemove.push(file);
+        }
+    }
+
+    let removed = 0;
+    if (toRemove.length > 0) {
+        const ownerIds = [
+            ...new Set(
+                toRemove
+                    .map((f) => (f.owner ? String(f.owner) : null))
+                    .filter(Boolean)
+            ),
+        ];
+        const owners =
+            ownerIds.length > 0
+                ? await User.find({ _id: { $in: ownerIds } })
+                      .select("username")
+                      .lean()
+                : [];
+        const ownerNameById = new Map(
+            owners.map((o) => [String(o._id), o.username])
+        );
+
+        for (const file of toRemove) {
+            const ownerKey = file.owner ? String(file.owner) : "";
+            const ownerUsername = ownerNameById.get(ownerKey);
             await softDeleteFile(file, {
-                userId: ownerId,
-                username: `${actorName} (folder)`,
+                userId: file.owner || null,
+                username: ownerUsername
+                    ? `${ownerUsername} (folder)`
+                    : FOLDER_UPLOAD_LABEL,
             });
             removed += 1;
         }
     }
 
+    const toImport = onDisk.filter(
+        (diskFile) =>
+            !knownPaths.has(diskFile.full) && !knownNames.has(diskFile.name)
+    );
+
     let imported = 0;
-    for (const diskFile of onDisk) {
-        const existing = await File.findOne({
-            deletedAt: null,
-            $or: [
-                { storagePath: diskFile.full },
-                {
-                    owner: ownerId,
-                    storedFilename: diskFile.name,
-                    storageKind: "disk",
-                },
-            ],
-        });
-
-        if (existing) {
-            // Local PC: claim Explorer files for whoever hits Refresh
-            if (
-                String(existing.owner) !== String(ownerId) &&
-                existing.storagePath &&
-                path.resolve(existing.storagePath) === diskFile.full
-            ) {
-                existing.owner = ownerId;
-                if (!existing.uploadedByUsername) {
-                    existing.uploadedByUsername = actorName;
-                }
-                await existing.save();
+    if (toImport.length > 0) {
+        const docs = [];
+        for (const diskFile of toImport) {
+            let size = 0;
+            try {
+                size = fs.statSync(diskFile.full).size;
+            } catch {
+                continue;
             }
-            continue;
+            markInternalWrite(diskFile.full);
+            docs.push({
+                filename: diskFile.name,
+                storedFilename: diskFile.name,
+                owner: ownerId,
+                uploadedByUsername: FOLDER_UPLOAD_LABEL,
+                fileSize: size,
+                fileType: guessMime(diskFile.name),
+                storageKind: "disk",
+                storagePath: diskFile.full,
+                accessMode: "private",
+                ...(networkId ? { networkId } : {}),
+            });
         }
-
-        markInternalWrite(diskFile.full);
-        await File.create({
-            filename: diskFile.name,
-            storedFilename: diskFile.name,
-            owner: ownerId,
-            uploadedByUsername: actorName,
-            fileSize: diskFile.size,
-            fileType: guessMime(diskFile.name),
-            storageKind: "disk",
-            storagePath: diskFile.full,
-            accessMode: "private",
-            ...(networkId ? { networkId } : {}),
-        });
-        imported += 1;
+        if (docs.length > 0) {
+            await File.insertMany(docs, { ordered: false });
+            imported = docs.length;
+        }
     }
 
     return { imported, removed, skipped: false, filesDir: resolvedDir };
@@ -158,4 +195,5 @@ module.exports = {
     reconcileExplorerFolder,
     guessMime,
     shouldSkipName,
+    FOLDER_UPLOAD_LABEL,
 };

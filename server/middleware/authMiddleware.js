@@ -2,7 +2,6 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { readAuthToken } = require("../utils/authCookie");
 const { hashSessionToken } = require("../utils/sessionToken");
-const { setLastSyncOwnerId } = require("../utils/syncOwner");
 
 async function authMiddleware(req, res, next) {
     const token = readAuthToken(req);
@@ -17,7 +16,9 @@ async function authMiddleware(req, res, next) {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await User.findById(decoded.id).select("sessionTokenHash role");
+        const user = await User.findById(decoded.id).select(
+            "sessionTokenHash role username email"
+        );
 
         if (!user || !user.sessionTokenHash) {
             return res.status(401).json({ message: "Unauthorized" });
@@ -29,14 +30,10 @@ async function authMiddleware(req, res, next) {
 
         req.user = {
             id: decoded.id,
-            username: decoded.username,
-            email: decoded.email,
+            username: user.username || decoded.username,
+            email: user.email || decoded.email,
             role: user.role || decoded.role || "user",
         };
-
-        if (decoded?.id) {
-            setLastSyncOwnerId(decoded.id);
-        }
 
         next();
     } catch {

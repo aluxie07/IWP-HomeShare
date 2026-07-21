@@ -17,6 +17,11 @@ import {
 } from "../utils/fileStorageScope";
 import { getApiMode } from "../utils/apiDiscovery";
 
+function isLocalApiMode() {
+    const mode = getApiMode();
+    return mode === "local" || mode === "manual";
+}
+
 function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
     const [files, setFiles] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -52,44 +57,108 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         [files, selectedFileId]
     );
 
-    const loadFiles = useCallback(async () => {
-        setLoading(true);
-        setError("");
+    const fetchFileList = useCallback(async () => {
+        const res = await fetch(`${getApiUrl()}/files`, {
+            credentials: "include",
+            headers: authHeaders(),
+            cache: "no-store",
+        });
 
-        try {
-            const res = await fetch(`${getApiUrl()}/files`, {
-                credentials: "include",
-                headers: authHeaders(),
-            });
-
-            if (res.status === 401) {
-                onRedirectToLogin();
-                return;
-            }
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                setError(data.message || "Could not load files");
-                return;
-            }
-
-            setFiles(data.files || []);
-        } catch {
-            setError("Could not reach server. Is the backend running?");
-        } finally {
-            setLoading(false);
+        if (res.status === 401) {
+            onRedirectToLogin();
+            return null;
         }
+
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.message || "Could not load files");
+        }
+        return data.files || [];
     }, [onRedirectToLogin]);
 
-    useEffect(() => {
-        loadFiles();
-    }, [loadFiles]);
+    /** Local disk: sync Explorer folder + return library. Cloud: list only. */
+    const fetchLibrarySnapshot = useCallback(async () => {
+        if (isLocalApiMode()) {
+            const syncRes = await fetch(`${getApiUrl()}/files/sync-folder`, {
+                method: "POST",
+                credentials: "include",
+                headers: authHeaders(),
+                cache: "no-store",
+            });
+
+            if (syncRes.status === 401) {
+                onRedirectToLogin();
+                return null;
+            }
+
+            const syncData = await syncRes.json().catch(() => ({}));
+            if (syncRes.ok && Array.isArray(syncData.files)) {
+                return {
+                    files: syncData.files,
+                    note: syncData.skipped
+                        ? ""
+                        : syncData.message || "",
+                };
+            }
+
+            // Older local servers may not return files from sync — fall back
+            const files = await fetchFileList();
+            if (!files) {
+                return null;
+            }
+            return {
+                files,
+                note: syncData.message || "Library refreshed",
+            };
+        }
+
+        const files = await fetchFileList();
+        if (!files) {
+            return null;
+        }
+        return { files, note: "" };
+    }, [fetchFileList, onRedirectToLogin]);
 
     useEffect(() => {
         let cancelled = false;
-        const mode = getApiMode();
-        const onLocalApi = mode === "local" || mode === "manual";
+
+        const loadOnEnter = async () => {
+            setLoading(true);
+            setError("");
+            setSyncNote("");
+
+            try {
+                const snapshot = await fetchLibrarySnapshot();
+                if (cancelled || !snapshot) {
+                    return;
+                }
+                setFiles(snapshot.files);
+                if (snapshot.note) {
+                    setSyncNote(snapshot.note);
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    setError(
+                        err.message ||
+                            "Could not reach server. Is the backend running?"
+                    );
+                }
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        loadOnEnter();
+        return () => {
+            cancelled = true;
+        };
+    }, [fetchLibrarySnapshot]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const onLocalApi = isLocalApiMode();
         if (!onLocalApi) {
             setPreferLocalLabels(false);
             return undefined;
@@ -101,7 +170,6 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                 if (cancelled) {
                     return;
                 }
-                // New servers send storageScope; old disk servers still expose folderShare
                 const localDisk =
                     data.storageScope === "local" ||
                     data.storageMode === "disk" ||
@@ -140,55 +208,37 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         setSyncNote("");
 
         try {
-            const syncRes = await fetch(`${getApiUrl()}/files/sync-folder`, {
-                method: "POST",
-                credentials: "include",
-                headers: authHeaders(),
-            });
-
-            if (syncRes.status === 401) {
-                onRedirectToLogin();
+            const snapshot = await fetchLibrarySnapshot();
+            if (!snapshot) {
                 return;
             }
-
-            const syncData = await syncRes.json().catch(() => ({}));
-
-            if (syncRes.ok && Array.isArray(syncData.files)) {
-                setFiles(syncData.files);
-                if (syncData.skipped) {
-                    setSyncNote(
-                        "Connected to the cloud API — drop-folder sync needs Detect local server first."
-                    );
-                } else if (syncData.message) {
-                    setSyncNote(syncData.message);
-                }
-                return;
-            }
-
-            const res = await fetch(`${getApiUrl()}/files`, {
-                credentials: "include",
-                headers: authHeaders(),
-            });
-
-            if (res.status === 401) {
-                onRedirectToLogin();
-                return;
-            }
-
-            const data = await res.json();
-            if (!res.ok) {
-                setError(data.message || syncData.message || "Could not refresh files");
-                return;
-            }
-
-            setFiles(data.files || []);
-            setSyncNote("Library refreshed");
-        } catch {
-            setError("Could not refresh. Is the local server running?");
+            setFiles(snapshot.files);
+            setSyncNote(snapshot.note || "Library refreshed");
+        } catch (err) {
+            setError(
+                err.message || "Could not refresh. Is the server running?"
+            );
         } finally {
             setRefreshing(false);
         }
     };
+
+    const loadFiles = useCallback(async () => {
+        setLoading(true);
+        setError("");
+        try {
+            const list = await fetchFileList();
+            if (list) {
+                setFiles(list);
+            }
+        } catch (err) {
+            setError(
+                err.message || "Could not reach server. Is the backend running?"
+            );
+        } finally {
+            setLoading(false);
+        }
+    }, [fetchFileList]);
 
     const handleDelete = async (fileId, filename) => {
         if (
