@@ -1086,6 +1086,48 @@
   flex: none;
 }
 
+.file-detail-modal__preview .file-text-preview {
+  width: 100%;
+}
+
+.file-text-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.file-text-preview__scroll {
+  max-height: min(50vh, 420px);
+  overflow: auto;
+  border: 1px solid #dde3ea;
+  border-radius: 10px;
+  background: #f7f9fb;
+  padding: 0.85rem 1rem;
+}
+
+.file-text-preview__scroll:focus-visible {
+  outline: 2px solid #06c;
+  outline-offset: 2px;
+}
+
+.file-text-preview__body {
+  margin: 0;
+  font-family: "IBM Plex Mono", "Consolas", "Courier New", monospace;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #1f2937;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.file-text-preview__note,
+.file-text-preview--loading .files-muted,
+.file-text-preview--error .files-muted {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
 .file-detail-modal__meta {
   display: flex;
   flex-direction: column;
@@ -1339,6 +1381,27 @@
 
 .file-thumb--image {
   background: #111;
+}
+
+.file-thumb--text {
+  align-items: stretch;
+  justify-content: flex-start;
+  background: #f8fafc;
+  padding: 0.35rem 0.4rem;
+}
+
+.file-thumb__text {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: "IBM Plex Mono", "Consolas", "Courier New", monospace;
+  font-size: 0.42rem;
+  line-height: 1.35;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+  pointer-events: none;
 }
 
 .file-thumb__img {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import NetworkStatusIndicator from "../components/NetworkStatusIndicator";
 import ShareFileModal from "../components/ShareFileModal";
 import FileThumbnail from "../components/FileThumbnail";
+import FileTextPreview from "../components/FileTextPreview";
 import {
     getApiUrl,
     formatFileSize,
@@ -19,6 +20,7 @@ import {
     fetchMergedLibrarySnapshot,
     fileApiFetch,
 } from "../utils/mergedLibrary";
+import { isTextFile } from "../utils/textFilePreview";
 
 function isLocalApiMode() {
     const mode = getApiMode();
@@ -508,10 +510,17 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
 
                         {!selectedFile.deleted && (
                             <div className="file-detail-modal__preview">
-                                <FileThumbnail
-                                    file={selectedFile}
-                                    onAuthError={onRedirectToLogin}
-                                />
+                                {isTextFile(selectedFile) ? (
+                                    <FileTextPreview
+                                        file={selectedFile}
+                                        onAuthError={onRedirectToLogin}
+                                    />
+                                ) : (
+                                    <FileThumbnail
+                                        file={selectedFile}
+                                        onAuthError={onRedirectToLogin}
+                                    />
+                                )}
                             </div>
                         )}
 

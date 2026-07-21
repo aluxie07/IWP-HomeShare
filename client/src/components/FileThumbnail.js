@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
 import { fileApiFetch } from "../utils/mergedLibrary";
+import {
+    MAX_TEXT_THUMB_BYTES,
+    TEXT_THUMB_CHARS,
+    fetchFileText,
+    isTextFile,
+    snippetForThumbnail,
+} from "../utils/textFilePreview";
 
 const IMAGE_TYPES = /^(image\/(jpeg|jpg|png|gif|webp|bmp|svg\+xml))$/i;
 const MAX_THUMB_BYTES = 8 * 1024 * 1024;
@@ -13,14 +20,21 @@ function isImageFile(file) {
 
 function FileThumbnail({ file, onAuthError }) {
     const [src, setSrc] = useState("");
+    const [textSnippet, setTextSnippet] = useState("");
     const [failed, setFailed] = useState(false);
 
     const showImage = isImageFile(file) && (file.fileSize || 0) <= MAX_THUMB_BYTES;
+    const showText =
+        !showImage &&
+        isTextFile(file) &&
+        (file.fileSize || 0) <= MAX_TEXT_THUMB_BYTES * 8;
 
     useEffect(() => {
         if (!showImage || !file?.id) {
             setSrc("");
-            setFailed(false);
+            if (!showText) {
+                setFailed(false);
+            }
             return undefined;
         }
 
@@ -64,7 +78,46 @@ function FileThumbnail({ file, onAuthError }) {
                 URL.revokeObjectURL(objectUrl);
             }
         };
-    }, [file, showImage, onAuthError]);
+    }, [file, showImage, showText, onAuthError]);
+
+    useEffect(() => {
+        if (!showText || !file?.id) {
+            setTextSnippet("");
+            if (!showImage) {
+                setFailed(false);
+            }
+            return undefined;
+        }
+
+        let cancelled = false;
+
+        (async () => {
+            try {
+                const result = await fetchFileText(file, {
+                    maxBytes: MAX_TEXT_THUMB_BYTES,
+                    onAuthError,
+                });
+                if (cancelled) {
+                    return;
+                }
+                if (!result?.text) {
+                    setFailed(true);
+                    return;
+                }
+                setTextSnippet(snippetForThumbnail(result.text, TEXT_THUMB_CHARS));
+                setFailed(false);
+            } catch {
+                if (!cancelled) {
+                    setFailed(true);
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [file, showText, showImage, onAuthError]);
+
     if (showImage && src && !failed) {
         return (
             <div className="file-thumb file-thumb--image">
@@ -73,7 +126,15 @@ function FileThumbnail({ file, onAuthError }) {
         );
     }
 
-    if (showImage && !failed) {
+    if (showText && textSnippet && !failed) {
+        return (
+            <div className="file-thumb file-thumb--text" aria-hidden="true">
+                <pre className="file-thumb__text">{textSnippet}</pre>
+            </div>
+        );
+    }
+
+    if ((showImage || showText) && !failed) {
         return (
             <div className="file-thumb file-thumb--loading" aria-hidden="true">
                 <span className="file-thumb__placeholder">…</span>
@@ -81,7 +142,11 @@ function FileThumbnail({ file, onAuthError }) {
         );
     }
 
-    const label = isImageFile(file) ? "IMG" : fileExtLabel(file?.filename);
+    const label = isImageFile(file)
+        ? "IMG"
+        : isTextFile(file)
+          ? "TXT"
+          : fileExtLabel(file?.filename);
     return (
         <div className="file-thumb file-thumb--icon" aria-hidden="true">
             <span className="file-thumb__placeholder">{label}</span>
