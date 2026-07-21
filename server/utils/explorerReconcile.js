@@ -179,7 +179,6 @@ async function reconcileExplorerFolder(ownerId, networkId = null) {
                 storageKind: "disk",
                 storagePath: diskFile.full,
                 accessMode: "private",
-                ...(networkId ? { networkId } : {}),
             });
         }
         if (docs.length > 0) {

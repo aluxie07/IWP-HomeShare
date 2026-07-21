@@ -1,4 +1,4 @@
-const TrustedNetwork = require("../models/TrustedNetwork");
+const os = require("os");
 
 function normalizeIp(raw) {
     if (!raw) {
@@ -104,7 +104,39 @@ function isLoopbackIpv4(ip) {
     return isIpv4(ip) && (ip === "127.0.0.1" || ip.startsWith("127."));
 }
 
-/** CIDR must use a private RFC1918-style base (not 127.x for registration target) */
+/** Prefer a real LAN IPv4 when the browser hits the local server via 127.0.0.1 */
+function getPreferredLanIpv4() {
+    const nets = os.networkInterfaces();
+    const candidates = [];
+
+    for (const entries of Object.values(nets)) {
+        for (const entry of entries || []) {
+            if (entry.family !== "IPv4" && entry.family !== 4) {
+                continue;
+            }
+            if (entry.internal) {
+                continue;
+            }
+            const ip = normalizeIp(entry.address);
+            if (isPrivateIpv4(ip) && !isLoopbackIpv4(ip)) {
+                candidates.push(ip);
+            }
+        }
+    }
+
+    // Prefer common home/office ranges
+    candidates.sort((a, b) => {
+        const score = (ip) => {
+            if (ip.startsWith("192.168.")) return 0;
+            if (ip.startsWith("10.")) return 1;
+            return 2;
+        };
+        return score(a) - score(b);
+    });
+
+    return candidates[0] || "";
+}
+
 function isPrivateLanCidr(cidr) {
     const [ipPart] = String(cidr || "").split("/");
     if (!isIpv4(ipPart)) {
@@ -144,61 +176,64 @@ function maskClientIp(ip) {
     return parts.join(".");
 }
 
-async function findNetworkForIp(ip) {
+/**
+ * Bind a Local Only file to the uploader's IP range (/24 on LAN, /32 on public).
+ */
+function buildLocalOnlyBinding(clientIp) {
+    let ip = normalizeIp(clientIp);
+
+    if (isLoopbackIpv4(ip) && isLocalDiskServer()) {
+        const lan = getPreferredLanIpv4();
+        if (lan) {
+            ip = lan;
+        }
+    }
+
     if (!isIpv4(ip)) {
         return null;
     }
 
-    // Host PC often uses http://127.0.0.1:8080 — treat as on-network when one LAN is registered
-    if (isLocalDiskServer() && isLoopbackIpv4(ip)) {
-        const localNetworks = await TrustedNetwork.find({}).sort({ updatedAt: -1 });
-        if (localNetworks.length === 1) {
-            return localNetworks[0];
-        }
+    if (isLoopbackIpv4(ip)) {
+        return {
+            uploadClientIp: ip,
+            localOnlyCidr: "127.0.0.0/8",
+        };
     }
 
-    const networks = await TrustedNetwork.find({}).sort({ updatedAt: -1 });
-    for (const config of networks) {
-        if (isIpInCidr(ip, config.subnet)) {
-            return config;
-        }
-        if (config.registeredFromIp && ip === config.registeredFromIp) {
-            return config;
-        }
+    if (isPrivateIpv4(ip)) {
+        return {
+            uploadClientIp: ip,
+            localOnlyCidr: subnetFromIp(ip, 24),
+        };
     }
-    return null;
+
+    // Public / cloud IP — exact host only
+    return {
+        uploadClientIp: ip,
+        localOnlyCidr: `${ip}/32`,
+    };
 }
 
-async function findNetworkBySubnet(subnet) {
-    const normalized = String(subnet || "").trim();
-    if (!normalized) {
-        return null;
-    }
-    return TrustedNetwork.findOne({ subnet: normalized });
-}
-
-async function isIpOnTrustedNetwork(ip) {
-    const config = await findNetworkForIp(ip);
-    if (config) {
-        return { trusted: true, configured: true, config };
-    }
-
-    const anyConfigured = (await TrustedNetwork.countDocuments({})) > 0;
-    return { trusted: false, configured: anyConfigured, config: null };
-}
-
-function getAccessLevel({ configured, trusted }) {
-    if (!trusted) {
-        return configured ? "restricted" : "unconfigured";
-    }
-    return "trusted";
-}
-
-function isNetworkAdmin(config, userId) {
-    if (!config || !userId) {
+/**
+ * True if requester may access a Local Only file bound to localOnlyCidr.
+ */
+function clientMatchesLocalOnlyCidr(clientIp, localOnlyCidr) {
+    const cidr = String(localOnlyCidr || "").trim();
+    if (!cidr) {
         return false;
     }
-    return String(config.registeredBy) === String(userId);
+
+    const ip = normalizeIp(clientIp);
+    if (isIpInCidr(ip, cidr)) {
+        return true;
+    }
+
+    // Local server host via 127.0.0.1 can still open files bound to their LAN
+    if (isLocalDiskServer() && isLoopbackIpv4(ip) && isPrivateLanCidr(cidr)) {
+        return true;
+    }
+
+    return false;
 }
 
 module.exports = {
@@ -209,11 +244,9 @@ module.exports = {
     isPrivateLanCidr,
     isLocalDiskServer,
     isLoopbackIpv4,
+    getPreferredLanIpv4,
     subnetFromIp,
     maskClientIp,
-    findNetworkForIp,
-    findNetworkBySubnet,
-    isIpOnTrustedNetwork,
-    getAccessLevel,
-    isNetworkAdmin,
+    buildLocalOnlyBinding,
+    clientMatchesLocalOnlyCidr,
 };

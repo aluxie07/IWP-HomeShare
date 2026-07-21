@@ -604,6 +604,13 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                         ))}
                                     </select>
                                 </label>
+                                {selectedFile.accessMode === "local_only" && (
+                                    <p className="files-muted file-detail-local-only-note">
+                                        Local Only range:{" "}
+                                        {selectedFile.localOnlyCidr ||
+                                            "not set yet — switch to Local Only again on the intended Wi‑Fi"}
+                                    </p>
+                                )}
 
                                 <div className="file-list-actions file-detail-actions">
                                     <button

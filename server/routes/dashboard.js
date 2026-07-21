@@ -24,9 +24,6 @@ router.get("/dashboard", authMiddleware, async (req, res) => {
                       role: req.user.role || "user",
                   },
             network: {
-                configured: req.trustedNetworkConfigured,
-                isTrustedNetwork: req.isTrustedNetwork,
-                accessLevel: req.networkAccessLevel,
                 clientIp: req.maskedClientIp,
             },
         });

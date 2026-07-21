@@ -65,9 +65,10 @@ router.get("/shared/:token", authMiddleware, async (req, res) => {
         }
 
         const fileInfo = await formatSharedFileInfo(access.file);
+        const isOwner = String(access.file.owner) === String(req.user.id);
         const networkCheck = assertFileNetworkAccess(access.file, {
-            isTrustedNetwork: req.isTrustedNetwork,
-            configured: req.trustedNetworkConfigured,
+            clientIp: req.clientIp,
+            isOwner,
         });
 
         if (!networkCheck.ok) {
@@ -75,13 +76,14 @@ router.get("/shared/:token", authMiddleware, async (req, res) => {
             fileInfo.networkBlocked = true;
             fileInfo.networkMessage = networkCheck.message;
         }
+        if (access.file.localOnlyCidr) {
+            fileInfo.localOnlyCidr = access.file.localOnlyCidr;
+        }
 
         res.status(200).json({
             file: fileInfo,
             network: {
-                configured: req.trustedNetworkConfigured,
-                isTrustedNetwork: req.isTrustedNetwork,
-                accessLevel: req.networkAccessLevel,
+                clientIp: req.maskedClientIp,
             },
         });
     } catch {
@@ -109,9 +111,10 @@ router.get("/shared/:token/download", authMiddleware, requireMongo, async (req, 
             });
         }
 
+        const isOwner = String(access.file.owner) === String(req.user.id);
         const networkCheck = assertFileNetworkAccess(access.file, {
-            isTrustedNetwork: req.isTrustedNetwork,
-            configured: req.trustedNetworkConfigured,
+            clientIp: req.clientIp,
+            isOwner,
         });
         if (!networkCheck.ok) {
             return res.status(networkCheck.status).json({

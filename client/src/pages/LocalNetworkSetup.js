@@ -130,7 +130,7 @@ function LocalNetworkSetup({ onBack, onDiscoveryUpdated }) {
             if (result.connected && (result.mode === "local" || result.mode === "manual")) {
                 await loadShareInfo(result.url);
                 setStatus(
-                    "Local server found. Copy a LAN address below for other devices, then register your network under Network settings."
+                    "Local server found. Copy a LAN address below for other devices."
                 );
                 setIsError(false);
             } else if (result.mode === "cloud" && result.connected) {

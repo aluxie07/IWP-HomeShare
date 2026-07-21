@@ -58,7 +58,11 @@ const fileSchema = new mongoose.Schema({
         enum: ["private", "shared", "local_only"],
         default: "private",
     },
-    /** When set, file is visible to all users on this registered network (subnet) */
+    /** Local Only: IP seen at upload / when mode was set to local_only */
+    uploadClientIp: { type: String, trim: true },
+    /** Local Only: CIDR range allowed to download (e.g. 192.168.1.0/24) */
+    localOnlyCidr: { type: String, trim: true },
+    /** @deprecated legacy trusted-network library share — unused */
     networkId: { type: mongoose.Schema.Types.ObjectId, ref: "TrustedNetwork" },
     /** Soft-delete: bytes removed, metadata kept for the library audit log */
     deletedAt: { type: Date },

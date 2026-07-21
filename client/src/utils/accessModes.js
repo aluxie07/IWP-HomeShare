@@ -13,7 +13,7 @@ export const ACCESS_MODES = [
         value: "local_only",
         label: "Local Only",
         description:
-            "Only users on the trusted network (same Wi-Fi / LAN) can download this file.",
+            "Saves the Wi‑Fi / LAN IP range used at upload. Only people on that same IP range can download.",
     },
 ];
 

@@ -44,6 +44,7 @@ const {
 } = require("../utils/fileAccess");
 const { softDeleteFile, isFileDeleted } = require("../utils/softDeleteFile");
 const { setLastSyncOwnerId } = require("../utils/syncOwner");
+const { buildLocalOnlyBinding } = require("../utils/networkTrust");
 
 const router = express.Router();
 const CHUNK_BODY_LIMIT = DEFAULT_CHUNK_SIZE + 1024 * 1024;
@@ -113,6 +114,10 @@ function formatFile(file) {
             file.deletedByUsername ||
             deletedByDoc?.username ||
             null,
+        localOnlyCidr:
+            normalizeAccessMode(file.accessMode) === "local_only"
+                ? file.localOnlyCidr || null
+                : null,
     };
 
     if (!deleted && file.shareToken) {
@@ -127,12 +132,7 @@ function formatFile(file) {
     return payload;
 }
 
-function libraryListQuery(userId, networkId) {
-    if (networkId) {
-        return {
-            $or: [{ owner: userId }, { networkId }],
-        };
-    }
+function libraryListQuery(userId) {
     return { owner: userId };
 }
 
@@ -141,22 +141,32 @@ function isFileOwner(file, userId) {
     return String(ownerId) === String(userId);
 }
 
-function isSameNetwork(file, networkId) {
-    if (!networkId || !file.networkId) {
+function applyLocalOnlyBinding(file, clientIp) {
+    const binding = buildLocalOnlyBinding(clientIp);
+    if (!binding) {
         return false;
     }
-    return String(file.networkId) === String(networkId);
+    file.uploadClientIp = binding.uploadClientIp;
+    file.localOnlyCidr = binding.localOnlyCidr;
+    return true;
 }
 
-function canAccessFileDownload(file, user, networkContext) {
+function clearLocalOnlyBinding(file) {
+    file.uploadClientIp = undefined;
+    file.localOnlyCidr = undefined;
+}
+
+function canAccessFileDownload(file, user, { clientIp } = {}) {
     if (isFileDeleted(file)) {
         return { ok: false, status: 404, message: "File not found" };
     }
-    const networkId = networkContext?.networkId || null;
-    if (!isFileOwner(file, user.id) && !isSameNetwork(file, networkId)) {
+    if (!isFileOwner(file, user.id)) {
         return { ok: false, status: 404, message: "File not found" };
     }
-    return assertFileNetworkAccess(file, networkContext);
+    return assertFileNetworkAccess(file, {
+        clientIp,
+        isOwner: true,
+    });
 }
 
 function sortLibraryFiles(files) {
@@ -173,29 +183,35 @@ function sortLibraryFiles(files) {
     });
 }
 
-async function loadLibraryFiles(userId, networkId) {
-    const files = await File.find(libraryListQuery(userId, networkId))
+async function loadLibraryFiles(userId) {
+    const files = await File.find(libraryListQuery(userId))
         .populate("owner", "username")
         .populate("deletedBy", "username");
     return sortLibraryFiles(files).map(formatFile);
 }
 
-function currentNetworkId(req) {
-    return req.currentNetworkId || null;
-}
-
-function canDeleteFile(file, user, networkId) {
+function canDeleteFile(file, user) {
     if (isFileOwner(file, user.id)) {
         return true;
     }
     if (user.role === "admin") {
         return true;
     }
-    if (isSameNetwork(file, networkId)) {
-        const mode = normalizeAccessMode(file.accessMode);
-        return mode === "shared" || mode === "local_only";
-    }
     return false;
+}
+
+function localOnlyFieldsForCreate(accessMode, clientIp) {
+    if (normalizeAccessMode(accessMode) !== "local_only") {
+        return {};
+    }
+    const binding = buildLocalOnlyBinding(clientIp);
+    if (!binding) {
+        return {};
+    }
+    return {
+        uploadClientIp: binding.uploadClientIp,
+        localOnlyCidr: binding.localOnlyCidr,
+    };
 }
 
 router.post(
@@ -303,9 +319,7 @@ router.post(
                 shardMeta,
                 chunks,
                 accessMode,
-                ...(currentNetworkId(req)
-                    ? { networkId: currentNetworkId(req) }
-                    : {}),
+                ...localOnlyFieldsForCreate(accessMode, req.clientIp),
             });
 
             if (!(await fileExists(record))) {
@@ -516,7 +530,7 @@ router.post("/files/upload/:uploadId/complete", authMiddleware, requireMongo, as
             shardMeta,
             chunks,
             accessMode: session.accessMode,
-            ...(currentNetworkId(req) ? { networkId: currentNetworkId(req) } : {}),
+            ...localOnlyFieldsForCreate(session.accessMode, req.clientIp),
         });
 
         cleanupSessionFiles(session);
@@ -551,7 +565,7 @@ router.delete("/files/upload/:uploadId", authMiddleware, (req, res) => {
 
 router.get("/files", authMiddleware, async (req, res) => {
     try {
-        const files = await loadLibraryFiles(req.user.id, currentNetworkId(req));
+        const files = await loadLibraryFiles(req.user.id);
         res.status(200).json({ files });
     } catch {
         res.status(500).json({ message: "Could not load files" });
@@ -563,7 +577,7 @@ router.post("/files/sync-folder", authMiddleware, requireMongo, async (req, res)
         setLastSyncOwnerId(req.user.id);
 
         if (!shouldUseDisk()) {
-            const files = await loadLibraryFiles(req.user.id, currentNetworkId(req));
+            const files = await loadLibraryFiles(req.user.id);
             return res.status(200).json({
                 message: "Library refreshed",
                 imported: 0,
@@ -573,11 +587,8 @@ router.post("/files/sync-folder", authMiddleware, requireMongo, async (req, res)
             });
         }
 
-        const result = await reconcileExplorerFolder(
-            req.user.id,
-            currentNetworkId(req)
-        );
-        const files = await loadLibraryFiles(req.user.id, currentNetworkId(req));
+        const result = await reconcileExplorerFolder(req.user.id, null);
+        const files = await loadLibraryFiles(req.user.id);
 
         res.status(200).json({
             message:
@@ -709,6 +720,16 @@ router.patch("/files/:id/access-mode", authMiddleware, async (req, res) => {
         }
 
         file.accessMode = accessMode;
+        if (accessMode === "local_only") {
+            if (!applyLocalOnlyBinding(file, req.clientIp)) {
+                return res.status(400).json({
+                    message:
+                        "Could not detect your IP for Local Only. Try again from a local network connection.",
+                });
+            }
+        } else {
+            clearLocalOnlyBinding(file);
+        }
         await file.save();
 
         res.status(200).json({
@@ -728,9 +749,9 @@ router.delete("/files/:id", authMiddleware, requireMongo, async (req, res) => {
             return res.status(404).json({ message: "File not found" });
         }
 
-        if (!canDeleteFile(file, req.user, currentNetworkId(req))) {
+        if (!canDeleteFile(file, req.user)) {
             return res.status(403).json({
-                message: "You can only delete your own private files, or Shared / Local Only files.",
+                message: "You can only delete your own files.",
             });
         }
 
@@ -758,9 +779,7 @@ router.get("/files/:id/download", authMiddleware, requireMongo, async (req, res)
         }
 
         const access = canAccessFileDownload(file, req.user, {
-            isTrustedNetwork: req.isTrustedNetwork,
-            configured: req.trustedNetworkConfigured,
-            networkId: currentNetworkId(req),
+            clientIp: req.clientIp,
         });
         if (!access.ok) {
             return res.status(access.status).json({

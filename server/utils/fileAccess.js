@@ -1,3 +1,7 @@
+const {
+    clientMatchesLocalOnlyCidr,
+} = require("./networkTrust");
+
 const ACCESS_MODES = ["private", "shared", "local_only"];
 
 function normalizeAccessMode(mode) {
@@ -5,7 +9,7 @@ function normalizeAccessMode(mode) {
     return ACCESS_MODES.includes(value) ? value : "private";
 }
 
-function requiresTrustedNetwork(file) {
+function requiresLocalOnlyIp(file) {
     return normalizeAccessMode(file.accessMode) === "local_only";
 }
 
@@ -13,35 +17,49 @@ function allowsShareLinks(file) {
     return normalizeAccessMode(file.accessMode) !== "private";
 }
 
-function getNetworkDenialMessage(file, { configured }) {
-    if (!configured) {
-        return "Trusted network is not configured yet. An administrator must register the network before Local Only files can be accessed.";
+function getLocalOnlyDenialMessage(file) {
+    if (!file?.localOnlyCidr) {
+        return "This Local Only file has no saved upload network. Change its access mode to Local Only again while on the intended Wi‑Fi.";
     }
-    return "This file is Local Only. Connect to the trusted network (same Wi-Fi / LAN) to access it.";
+    return "This file is Local Only. Connect from the same local network (IP range) as the uploader to download it.";
 }
 
-function assertFileNetworkAccess(file, { isTrustedNetwork, configured }) {
-    if (!requiresTrustedNetwork(file)) {
+/**
+ * Owner always passes. Local Only requires requester IP in the file's CIDR.
+ */
+function assertFileNetworkAccess(file, { clientIp, isOwner = false } = {}) {
+    if (!requiresLocalOnlyIp(file)) {
         return { ok: true };
     }
 
-    if (!configured || !isTrustedNetwork) {
+    if (isOwner) {
+        return { ok: true };
+    }
+
+    if (!clientMatchesLocalOnlyCidr(clientIp, file.localOnlyCidr)) {
         return {
             ok: false,
             status: 403,
             code: "LOCAL_NETWORK_REQUIRED",
-            message: getNetworkDenialMessage(file, { configured }),
+            message: getLocalOnlyDenialMessage(file),
         };
     }
 
     return { ok: true };
 }
 
+/** @deprecated use requiresLocalOnlyIp */
+function requiresTrustedNetwork(file) {
+    return requiresLocalOnlyIp(file);
+}
+
 module.exports = {
     ACCESS_MODES,
     normalizeAccessMode,
+    requiresLocalOnlyIp,
     requiresTrustedNetwork,
     allowsShareLinks,
-    getNetworkDenialMessage,
+    getLocalOnlyDenialMessage,
+    getNetworkDenialMessage: getLocalOnlyDenialMessage,
     assertFileNetworkAccess,
 };

@@ -9,7 +9,6 @@ function Dashboard({
     onDeleteAccount,
     onGoToUpload,
     onGoToLibrary,
-    onGoToNetworkSettings,
     onGoToLocalSetup,
 }) {
     const [message, setMessage] = useState("");
@@ -88,23 +87,14 @@ function Dashboard({
                             </div>
                         )}
                         <div className="dashboard-network-panel">
-                            <h3 className="dashboard-network-title">Local network status</h3>
+                            <h3 className="dashboard-network-title">Connection</h3>
                             <NetworkStatusIndicator
                                 initialStatus={
                                     network
                                         ? {
-                                              configured: network.configured,
-                                              isTrustedNetwork: network.isTrustedNetwork,
-                                              accessLevel: network.accessLevel,
                                               clientIp: network.clientIp,
-                                              trustedNetwork: null,
-                                              capabilities: {
-                                                  localOnlyAccess:
-                                                      network.configured &&
-                                                      network.isTrustedNetwork,
-                                                  sharedAccess: true,
-                                                  privateAccess: true,
-                                              },
+                                              message:
+                                                  "Local Only files are limited to the uploader's IP range (same Wi‑Fi / LAN).",
                                           }
                                         : null
                                 }
@@ -133,15 +123,6 @@ function Dashboard({
                         </button>
                     )}
                 </div>
-                {onGoToNetworkSettings && (
-                    <button
-                        type="button"
-                        className="auth-form__secondary-btn dashboard-network-settings-btn"
-                        onClick={onGoToNetworkSettings}
-                    >
-                        Network settings
-                    </button>
-                )}
                 <div className="dashboard-actions">
                     <button type="button" className="logout-btn" onClick={handleLogout}>
                         Logout

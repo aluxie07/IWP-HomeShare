@@ -120,7 +120,14 @@ function ShareFileModal({ file, onClose, onShareUpdated }) {
                 </p>
                 {file.accessMode === "local_only" && (
                     <p className="share-modal-network-note">
-                        Recipients must be on the trusted network to download this file.
+                        Recipients must be on the same local IP range as when this
+                        file was set to Local Only (usually the same Wi‑Fi).
+                        {file.localOnlyCidr ? (
+                            <>
+                                {" "}
+                                Allowed range: <code>{file.localOnlyCidr}</code>
+                            </>
+                        ) : null}
                     </p>
                 )}
                 {isLocalFile && (

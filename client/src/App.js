@@ -14,7 +14,6 @@ import DeleteAccount from "./pages/DeleteAccount";
 import FileUpload from "./pages/FileUpload";
 import FileLibrary from "./pages/FileLibrary";
 import SharedFile from "./pages/SharedFile";
-import NetworkSettings from "./pages/NetworkSettings";
 import LocalNetworkSetup from "./pages/LocalNetworkSetup";
 import Help from "./pages/Help";
 import { initApiDiscovery, switchToCloudApi } from "./utils/apiDiscovery";
@@ -180,7 +179,6 @@ function App() {
             "upload",
             "library",
             "shared-file",
-            "network-settings",
         ];
         if (protectedPages.includes(page) && !hasStoredAuth()) {
             if (page === "shared-file" && shareToken) {
@@ -221,13 +219,6 @@ function App() {
                     }
                     setPage("library");
                 }}
-                onSettingsClick={() => {
-                    if (!hasStoredAuth()) {
-                        setPage("login");
-                        return;
-                    }
-                    setPage("network-settings");
-                }}
                 onHelpClick={() => setPage("help")}
                 onExitLocalMode={async () => {
                     setExitingLocalMode(true);
@@ -245,7 +236,6 @@ function App() {
                     }
                 }}
                 exitingLocalMode={exitingLocalMode}
-                showSettings={isLoggedIn}
                 onGetStarted={() => setPage("register")}
                 showGetStarted={!isLoggedIn}
             />
@@ -313,14 +303,7 @@ function App() {
                         onDeleteAccount={() => setPage("delete-account")}
                         onGoToUpload={() => setPage("upload")}
                         onGoToLibrary={() => setPage("library")}
-                        onGoToNetworkSettings={() => setPage("network-settings")}
                         onGoToLocalSetup={() => setPage("local-network-setup")}
-                    />
-                )}
-                {page === "network-settings" && (
-                    <NetworkSettings
-                        onRedirectToLogin={redirectToLogin}
-                        onBack={() => setPage("dashboard")}
                     />
                 )}
                 {page === "local-network-setup" && (

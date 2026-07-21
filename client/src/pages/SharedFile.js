@@ -170,7 +170,12 @@ function SharedFile({ shareToken, onRedirectToLogin }) {
                             )}
                             {file.accessMode === "local_only" && (
                                 <p className="shared-file-local-only">
-                                    Local Only — download requires the trusted network.
+                                    Local Only — download requires the same local IP
+                                    range as the uploader
+                                    {file.localOnlyCidr
+                                        ? ` (${file.localOnlyCidr})`
+                                        : ""}
+                                    .
                                 </p>
                             )}
                             {file.storageScope === "local" && (

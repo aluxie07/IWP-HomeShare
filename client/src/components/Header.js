@@ -10,11 +10,9 @@ function Header({
     onDashboardClick,
     onUploadClick,
     onLibraryClick,
-    onSettingsClick,
     onHelpClick,
     onExitLocalMode,
     exitingLocalMode,
-    showSettings,
     onGetStarted,
     showGetStarted,
 }) {
@@ -134,19 +132,6 @@ function Header({
                             >
                                 Library
                             </button>
-                            {showSettings && (
-                                <button
-                                    type="button"
-                                    className={`header-nav-link ${
-                                        currentPage === "network-settings"
-                                            ? "header-nav-link--active"
-                                            : ""
-                                    }`}
-                                    onClick={onSettingsClick}
-                                >
-                                    Network
-                                </button>
-                            )}
                         </>
                     )}
                     <button
@@ -232,19 +217,6 @@ function Header({
                         >
                             Library
                         </button>
-                        {showSettings && (
-                            <button
-                                type="button"
-                                className={`header-nav-link ${
-                                    currentPage === "network-settings"
-                                        ? "header-nav-link--active"
-                                        : ""
-                                }`}
-                                onClick={runAndClose(onSettingsClick)}
-                            >
-                                Network
-                            </button>
-                        )}
                     </>
                 )}
                 <button

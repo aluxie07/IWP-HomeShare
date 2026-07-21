@@ -35,7 +35,6 @@ function Help({ onBack, onOpenLocalSetup }) {
                         <li>Download and run the local package as an administrator on the host PC. Follow the setup instructions and wait until you see "MongoDB connected". </li>
                         <li>On that PC, open Local Network Mode on the HomeShare website and click Detect</li>
                         <li>Copy the LAN address for phones or other PCs</li>
-                        <li>Register your Wi‑Fi under Network settings (first person becomes admin)</li>
                     </ol>
                     {onOpenLocalSetup && (
                         <button
@@ -76,22 +75,12 @@ function Help({ onBack, onOpenLocalSetup }) {
                             <strong>Shared</strong> — you can create a share link for others
                         </li>
                         <li>
-                            <strong>Local Only</strong> — download works only on a registered
-                            trusted Wi‑Fi (LAN), not from the public internet
+                            <strong>Local Only</strong> — remembers the uploader’s Wi‑Fi / LAN
+                            IP range; only people on that same range can download
                         </li>
                     </ul>
                     <p className="files-muted">
                         Access mode is separate from the Cloud/Local storage badge.
-                    </p>
-                </div>
-
-                <div className="help-section">
-                    <h3 className="files-section-title">Trusted network</h3>
-                    <p className="files-muted">
-                        The first person to register a Wi‑Fi network becomes the network admin.
-                        Others on that network can use shared files for that network. A different
-                        Wi‑Fi network needs its own registration. Register from Local
-                        Network Mode, as the cloud site cannot see your home Wi‑Fi address.
                     </p>
                 </div>
 

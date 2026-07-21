@@ -1588,6 +1588,21 @@
   background: #f0faf0;
 }
 
+.network-status--info {
+  border-color: #b8d4f0;
+  background: #f5f9fd;
+}
+
+.network-status--info .network-status__dot {
+  background: #3b82c4;
+}
+
+.network-status__compact-ip {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: #556;
+}
+
 .network-status--restricted {
   border-color: #f0c987;
   background: #fff8ed;
