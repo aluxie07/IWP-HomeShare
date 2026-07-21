@@ -18,8 +18,7 @@ function Help({ onBack, onOpenLocalSetup }) {
                     <h3 className="files-section-title">Cloud mode</h3>
                     <p className="files-muted">
                         Cloud mode allows you to upload files online.. You can log in, upload, and manage files from anywhere with internet. File contents are stored in the cloud. Use this when you are not running a local server.
-                        and manage files from anywhere with internet. File contents are stored in
-                        the cloud.
+                        File contents are stored in the cloud.
                     </p>
                 </div>
 
