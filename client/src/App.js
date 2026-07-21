@@ -33,7 +33,10 @@ import {
     getResetTokenFromUrl,
     getShareTokenFromUrl,
     clearUrlSearchParams,
+    setPendingShare,
+    peekPendingShare,
     consumePendingShare,
+    ensureShareInUrl,
 } from "./utils/urlTokens";
 
 function getInitialRoute() {
@@ -47,23 +50,14 @@ function getInitialRoute() {
         return { page: "reset-password", verifyToken: null, resetToken, shareToken: null };
     }
 
-    const shareToken = getShareTokenFromUrl();
+    const shareToken = getShareTokenFromUrl() || peekPendingShare();
     if (shareToken) {
+        setPendingShare(shareToken);
+        ensureShareInUrl(shareToken);
         if (!hasStoredAuth()) {
-            sessionStorage.setItem("pendingShare", shareToken);
             return { page: "login", verifyToken: null, resetToken: null, shareToken };
         }
         return { page: "shared-file", verifyToken: null, resetToken: null, shareToken };
-    }
-
-    const pendingShare = consumePendingShare();
-    if (pendingShare && hasStoredAuth()) {
-        return {
-            page: "shared-file",
-            verifyToken: null,
-            resetToken: null,
-            shareToken: pendingShare,
-        };
     }
 
     return { page: "home", verifyToken: null, resetToken: null, shareToken: null };
@@ -120,8 +114,13 @@ function App() {
             setShareToken(share);
             setVerifyToken(null);
             setResetToken(null);
-            setPage("shared-file");
-            clearUrlSearchParams();
+            setPendingShare(share);
+            ensureShareInUrl(share);
+            if (hasStoredAuth()) {
+                setPage("shared-file");
+            } else {
+                setPage("login");
+            }
         }
     }, []);
 
@@ -135,6 +134,13 @@ function App() {
         page === "reset-password";
 
     const redirectToLogin = async () => {
+        const pending =
+            shareToken || getShareTokenFromUrl() || peekPendingShare();
+        if (pending) {
+            setPendingShare(pending);
+            setShareToken(pending);
+            ensureShareInUrl(pending);
+        }
         try {
             await apiFetch("/logout", { method: "POST" });
         } catch {
@@ -153,9 +159,14 @@ function App() {
     const handleLoginSuccess = () => {
         touchSessionActivity();
         setIsLoggedIn(true);
-        const pendingShare = consumePendingShare();
+        const pendingShare =
+            consumePendingShare() ||
+            shareToken ||
+            getShareTokenFromUrl();
         if (pendingShare) {
             setShareToken(pendingShare);
+            setPendingShare(pendingShare);
+            ensureShareInUrl(pendingShare);
             setPage("shared-file");
             return;
         }
@@ -172,9 +183,13 @@ function App() {
             "network-settings",
         ];
         if (protectedPages.includes(page) && !hasStoredAuth()) {
+            if (page === "shared-file" && shareToken) {
+                setPendingShare(shareToken);
+                ensureShareInUrl(shareToken);
+            }
             setPage("login");
         }
-    }, [page]);
+    }, [page, shareToken]);
 
     return (
         <div className="App">

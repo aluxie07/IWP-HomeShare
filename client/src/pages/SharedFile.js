@@ -6,6 +6,11 @@ import {
     formatUploadDate,
 } from "../utils/api";
 import { isLoggedIn } from "../utils/authStorage";
+import {
+    setPendingShare,
+    ensureShareInUrl,
+    clearPendingShare,
+} from "../utils/urlTokens";
 
 function SharedFile({ shareToken, onRedirectToLogin }) {
     const [file, setFile] = useState(null);
@@ -14,6 +19,14 @@ function SharedFile({ shareToken, onRedirectToLogin }) {
     const [downloadError, setDownloadError] = useState("");
     const [downloading, setDownloading] = useState(false);
 
+    const rememberShareAndLogin = () => {
+        if (shareToken) {
+            setPendingShare(shareToken);
+            ensureShareInUrl(shareToken);
+        }
+        onRedirectToLogin();
+    };
+
     useEffect(() => {
         if (!shareToken) {
             setError("No share token provided.");
@@ -21,9 +34,11 @@ function SharedFile({ shareToken, onRedirectToLogin }) {
             return;
         }
 
+        setPendingShare(shareToken);
+        ensureShareInUrl(shareToken);
+
         if (!isLoggedIn()) {
-            sessionStorage.setItem("pendingShare", shareToken);
-            onRedirectToLogin();
+            rememberShareAndLogin();
             return;
         }
 
@@ -38,8 +53,7 @@ function SharedFile({ shareToken, onRedirectToLogin }) {
                 const data = await res.json();
 
                 if (res.status === 401) {
-                    sessionStorage.setItem("pendingShare", shareToken);
-                    onRedirectToLogin();
+                    rememberShareAndLogin();
                     return;
                 }
 
@@ -51,6 +65,7 @@ function SharedFile({ shareToken, onRedirectToLogin }) {
                 }
 
                 if (!cancelled) {
+                    clearPendingShare();
                     setFile(data.file);
                 }
             } catch {
@@ -69,7 +84,8 @@ function SharedFile({ shareToken, onRedirectToLogin }) {
         return () => {
             cancelled = true;
         };
-    }, [shareToken, onRedirectToLogin]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- only reload when share token changes
+    }, [shareToken]);
 
     const handleDownload = async () => {
         setDownloadError("");
@@ -82,7 +98,7 @@ function SharedFile({ shareToken, onRedirectToLogin }) {
             );
 
             if (res.status === 401) {
-                onRedirectToLogin();
+                rememberShareAndLogin();
                 return;
             }
 
