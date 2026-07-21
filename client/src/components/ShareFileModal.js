@@ -2,8 +2,11 @@ import { useState } from "react";
 import { getApiUrl, authHeaders } from "../utils/api";
 import { buildShareLink } from "../utils/urlTokens";
 import { canShareFile, getAccessModeLabel } from "../utils/accessModes";
+import { resolveStorageScope } from "../utils/fileStorageScope";
 
 function ShareFileModal({ file, onClose, onShareUpdated }) {
+    const isLocalFile = resolveStorageScope(file) === "local";
+
     const [expiresInHours, setExpiresInHours] = useState("24");
     const [maxDownloads, setMaxDownloads] = useState("");
     const [viewOnly, setViewOnly] = useState(false);
@@ -118,6 +121,12 @@ function ShareFileModal({ file, onClose, onShareUpdated }) {
                 {file.accessMode === "local_only" && (
                     <p className="share-modal-network-note">
                         Recipients must be on the trusted network to download this file.
+                    </p>
+                )}
+                {isLocalFile && (
+                    <p className="share-modal-local-warning" role="status">
+                        Warning: Local shared files can only be downloaded if the other
+                        user is connected to the same local HomeShare server.
                     </p>
                 )}
                 {!canShareFile(file) && (

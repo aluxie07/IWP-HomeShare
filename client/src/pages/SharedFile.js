@@ -173,6 +173,13 @@ function SharedFile({ shareToken, onRedirectToLogin }) {
                                     Local Only — download requires the trusted network.
                                 </p>
                             )}
+                            {file.storageScope === "local" && (
+                                <p className="shared-file-local-storage-warning" role="status">
+                                    Warning: This is a local file. It can only be downloaded
+                                    if you are connected to the same local HomeShare server
+                                    as the person who shared it.
+                                </p>
+                            )}
                             {file.networkBlocked && file.networkMessage && (
                                 <p className="shared-file-network-blocked">
                                     {file.networkMessage}

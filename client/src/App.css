@@ -1760,6 +1760,20 @@
   margin: 0 0 0.75rem;
 }
 
+.share-modal-local-warning,
+.shared-file-local-storage-warning {
+  text-align: left;
+  font-family: "Jost", sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: #8a5a00;
+  background: #fff8e8;
+  border: 1px solid #f0d78c;
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  margin: 0 0 0.85rem;
+}
+
 .header-nav-link--settings {
   margin-left: 0.5rem;
 }

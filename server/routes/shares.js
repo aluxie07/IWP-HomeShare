@@ -16,6 +16,14 @@ const {
 
 const router = express.Router();
 
+function resolveStorageScope(file) {
+    const kind = String(file?.storageKind || "").toLowerCase();
+    if (kind === "disk" || file?.storagePath) {
+        return "local";
+    }
+    return "cloud";
+}
+
 async function formatSharedFileInfo(file) {
     const owner = await User.findById(file.owner).select("username");
     return {
@@ -26,6 +34,7 @@ async function formatSharedFileInfo(file) {
         uploadDate: file.uploadDate,
         permission: file.sharePermission,
         accessMode: normalizeAccessMode(file.accessMode),
+        storageScope: resolveStorageScope(file),
         ownerUsername: owner?.username || "Unknown",
         canDownload: file.sharePermission === "download",
         shareExpiresAt: file.shareExpiresAt,
