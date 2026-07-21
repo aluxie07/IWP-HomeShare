@@ -67,21 +67,22 @@ export function setApiOverride(url) {
     }
 }
 
-function clearStoredSessionToken() {
-    try {
-        sessionStorage.removeItem("homeshare_session_token");
-    } catch {
-        // ignore
-    }
-}
-
 function setActive(url, mode) {
-    if (activeApiUrl && url && activeApiUrl.replace(/\/$/, "") !== url.replace(/\/$/, "")) {
-        clearStoredSessionToken();
-    }
+    // Keep cloud and local sessions when switching API mode (merged library).
     activeApiUrl = url;
     activeMode = mode;
     localStorage.setItem(STORAGE_MODE_KEY, mode);
+
+    if (mode === "local" || mode === "manual") {
+        try {
+            const trimmed = String(url || "").trim().replace(/\/$/, "");
+            if (trimmed) {
+                localStorage.setItem("homeshare_local_api_url", trimmed);
+            }
+        } catch {
+            // ignore
+        }
+    }
 }
 
 function isPrivateLanHost(hostname) {

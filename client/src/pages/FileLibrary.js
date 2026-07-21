@@ -4,7 +4,6 @@ import ShareFileModal from "../components/ShareFileModal";
 import FileThumbnail from "../components/FileThumbnail";
 import {
     getApiUrl,
-    authHeaders,
     formatFileSize,
     formatUploadDate,
 } from "../utils/api";
@@ -16,10 +15,24 @@ import {
     resolveStorageScope,
 } from "../utils/fileStorageScope";
 import { getApiMode } from "../utils/apiDiscovery";
+import {
+    fetchMergedLibrarySnapshot,
+    fileApiFetch,
+} from "../utils/mergedLibrary";
 
 function isLocalApiMode() {
     const mode = getApiMode();
     return mode === "local" || mode === "manual";
+}
+
+function mergeServerFileIntoTagged(existing, serverFile) {
+    return {
+        ...existing,
+        ...serverFile,
+        apiSource: existing.apiSource,
+        sourceId: serverFile.id ?? existing.sourceId,
+        id: existing.id,
+    };
 }
 
 function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
@@ -32,6 +45,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
     const [updatingModeId, setUpdatingModeId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
     const [syncNote, setSyncNote] = useState("");
+    const [linkBanner, setLinkBanner] = useState("");
     const [storageFilter, setStorageFilter] = useState("all");
     const [preferLocalLabels, setPreferLocalLabels] = useState(false);
 
@@ -57,67 +71,32 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         [files, selectedFileId]
     );
 
-    const fetchFileList = useCallback(async () => {
-        const res = await fetch(`${getApiUrl()}/files`, {
-            credentials: "include",
-            headers: authHeaders(),
-            cache: "no-store",
-        });
+    const applySnapshot = useCallback((snapshot, { refreshLabel = false } = {}) => {
+        setFiles(snapshot.files);
+        const linkMsg =
+            !snapshot.linkStatus?.linked && snapshot.linkStatus?.message
+                ? snapshot.linkStatus.message
+                : "";
+        setLinkBanner(linkMsg);
 
-        if (res.status === 401) {
-            onRedirectToLogin();
-            return null;
+        let note = snapshot.note || "";
+        if (refreshLabel && !note) {
+            note = "Library refreshed";
         }
+        setSyncNote(note);
+    }, []);
 
-        const data = await res.json();
-        if (!res.ok) {
-            throw new Error(data.message || "Could not load files");
-        }
-        return data.files || [];
-    }, [onRedirectToLogin]);
-
-    /** Local disk: sync Explorer folder + return library. Cloud: list only. */
     const fetchLibrarySnapshot = useCallback(async () => {
-        if (isLocalApiMode()) {
-            const syncRes = await fetch(`${getApiUrl()}/files/sync-folder`, {
-                method: "POST",
-                credentials: "include",
-                headers: authHeaders(),
-                cache: "no-store",
-            });
-
-            if (syncRes.status === 401) {
+        try {
+            return await fetchMergedLibrarySnapshot();
+        } catch (err) {
+            if (err.status === 401) {
                 onRedirectToLogin();
                 return null;
             }
-
-            const syncData = await syncRes.json().catch(() => ({}));
-            if (syncRes.ok && Array.isArray(syncData.files)) {
-                return {
-                    files: syncData.files,
-                    note: syncData.skipped
-                        ? ""
-                        : syncData.message || "",
-                };
-            }
-
-            // Older local servers may not return files from sync — fall back
-            const files = await fetchFileList();
-            if (!files) {
-                return null;
-            }
-            return {
-                files,
-                note: syncData.message || "Library refreshed",
-            };
+            throw err;
         }
-
-        const files = await fetchFileList();
-        if (!files) {
-            return null;
-        }
-        return { files, note: "" };
-    }, [fetchFileList, onRedirectToLogin]);
+    }, [onRedirectToLogin]);
 
     useEffect(() => {
         let cancelled = false;
@@ -126,16 +105,14 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
             setLoading(true);
             setError("");
             setSyncNote("");
+            setLinkBanner("");
 
             try {
                 const snapshot = await fetchLibrarySnapshot();
                 if (cancelled || !snapshot) {
                     return;
                 }
-                setFiles(snapshot.files);
-                if (snapshot.note) {
-                    setSyncNote(snapshot.note);
-                }
+                applySnapshot(snapshot);
             } catch (err) {
                 if (!cancelled) {
                     setError(
@@ -154,7 +131,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         return () => {
             cancelled = true;
         };
-    }, [fetchLibrarySnapshot]);
+    }, [fetchLibrarySnapshot, applySnapshot]);
 
     useEffect(() => {
         let cancelled = false;
@@ -212,8 +189,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
             if (!snapshot) {
                 return;
             }
-            setFiles(snapshot.files);
-            setSyncNote(snapshot.note || "Library refreshed");
+            applySnapshot(snapshot, { refreshLabel: true });
         } catch (err) {
             setError(
                 err.message || "Could not refresh. Is the server running?"
@@ -227,9 +203,9 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         setLoading(true);
         setError("");
         try {
-            const list = await fetchFileList();
-            if (list) {
-                setFiles(list);
+            const snapshot = await fetchLibrarySnapshot();
+            if (snapshot) {
+                applySnapshot(snapshot);
             }
         } catch (err) {
             setError(
@@ -238,26 +214,22 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         } finally {
             setLoading(false);
         }
-    }, [fetchFileList]);
+    }, [fetchLibrarySnapshot, applySnapshot]);
 
-    const handleDelete = async (fileId, filename) => {
+    const handleDelete = async (file) => {
         if (
             !window.confirm(
-                `Delete "${filename}"? The file will be removed, but a log entry will stay in the library.`
+                `Delete "${file.filename}"? The file will be removed, but a log entry will stay in the library.`
             )
         ) {
             return;
         }
 
-        setDeletingId(fileId);
+        setDeletingId(file.id);
         setError("");
 
         try {
-            const res = await fetch(`${getApiUrl()}/files/${fileId}`, {
-                method: "DELETE",
-                credentials: "include",
-                headers: authHeaders(),
-            });
+            const res = await fileApiFetch(file, "", { method: "DELETE" });
 
             if (res.status === 401) {
                 onRedirectToLogin();
@@ -279,16 +251,14 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         }
     };
 
-    const handleAccessModeChange = async (fileId, nextMode) => {
-        setUpdatingModeId(fileId);
+    const handleAccessModeChange = async (file, nextMode) => {
+        setUpdatingModeId(file.id);
         setError("");
 
         try {
-            const res = await fetch(`${getApiUrl()}/files/${fileId}/access-mode`, {
+            const res = await fileApiFetch(file, "/access-mode", {
                 method: "PATCH",
-                credentials: "include",
                 headers: {
-                    ...authHeaders(),
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({ accessMode: nextMode }),
@@ -303,7 +273,11 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
 
             if (data.file) {
                 setFiles((prev) =>
-                    prev.map((file) => (file.id === fileId ? { ...file, ...data.file } : file))
+                    prev.map((entry) =>
+                        entry.id === file.id
+                            ? mergeServerFileIntoTagged(entry, data.file)
+                            : entry
+                    )
                 );
             } else {
                 await loadFiles();
@@ -315,12 +289,9 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         }
     };
 
-    const handleDownload = async (fileId, filename) => {
+    const handleDownload = async (file) => {
         try {
-            const res = await fetch(`${getApiUrl()}/files/${fileId}/download`, {
-                credentials: "include",
-                headers: authHeaders(),
-            });
+            const res = await fileApiFetch(file, "/download");
 
             if (res.status === 401) {
                 onRedirectToLogin();
@@ -337,7 +308,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.href = url;
-            link.download = filename;
+            link.download = file.filename;
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -378,6 +349,12 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                 </p>
 
                 <NetworkStatusIndicator compact />
+
+                {!loading && linkBanner && (
+                    <p className="library-link-banner" role="status">
+                        {linkBanner}
+                    </p>
+                )}
 
                 {!loading && !error && activeFiles.length > 0 && (
                     <div className="file-library-filters" role="group" aria-label="Filter by storage">
@@ -592,7 +569,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                         disabled={updatingModeId === selectedFile.id}
                                         onChange={(e) =>
                                             handleAccessModeChange(
-                                                selectedFile.id,
+                                                selectedFile,
                                                 e.target.value
                                             )
                                         }
@@ -629,24 +606,14 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                     <button
                                         type="button"
                                         className="file-download-btn"
-                                        onClick={() =>
-                                            handleDownload(
-                                                selectedFile.id,
-                                                selectedFile.filename
-                                            )
-                                        }
+                                        onClick={() => handleDownload(selectedFile)}
                                     >
                                         Download
                                     </button>
                                     <button
                                         type="button"
                                         className="share-revoke-btn"
-                                        onClick={() =>
-                                            handleDelete(
-                                                selectedFile.id,
-                                                selectedFile.filename
-                                            )
-                                        }
+                                        onClick={() => handleDelete(selectedFile)}
                                         disabled={deletingId === selectedFile.id}
                                     >
                                         {deletingId === selectedFile.id

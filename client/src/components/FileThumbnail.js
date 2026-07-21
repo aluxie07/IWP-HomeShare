@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getApiUrl, authHeaders } from "../utils/api";
+import { fileApiFetch } from "../utils/mergedLibrary";
 
 const IMAGE_TYPES = /^(image\/(jpeg|jpg|png|gif|webp|bmp|svg\+xml))$/i;
 const MAX_THUMB_BYTES = 8 * 1024 * 1024;
@@ -29,10 +29,7 @@ function FileThumbnail({ file, onAuthError }) {
 
         (async () => {
             try {
-                const res = await fetch(`${getApiUrl()}/files/${file.id}/download`, {
-                    credentials: "include",
-                    headers: authHeaders(),
-                });
+                const res = await fileApiFetch(file, "/download");
 
                 if (res.status === 401) {
                     onAuthError?.();
@@ -67,8 +64,16 @@ function FileThumbnail({ file, onAuthError }) {
                 URL.revokeObjectURL(objectUrl);
             }
         };
-    }, [file?.id, file?.fileType, file?.fileSize, file?.filename, showImage, onAuthError]);
-
+    }, [
+        file?.id,
+        file?.apiSource,
+        file?.sourceId,
+        file?.fileType,
+        file?.fileSize,
+        file?.filename,
+        showImage,
+        onAuthError,
+    ]);
     if (showImage && src && !failed) {
         return (
             <div className="file-thumb file-thumb--image">

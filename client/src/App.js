@@ -20,6 +20,7 @@ import { initApiDiscovery, switchToCloudApi } from "./utils/apiDiscovery";
 import {
     isLoggedIn as hasStoredAuth,
     clearAuth,
+    getActiveApiSlot,
 } from "./utils/authStorage";
 import { apiFetch } from "./utils/api";
 import {
@@ -145,10 +146,12 @@ function App() {
         } catch {
             // ignore
         }
-        clearAuth();
+        // Clear only the active API session so the other side stays linked
+        clearAuth(getActiveApiSlot());
         clearSessionActivity();
-        setIsLoggedIn(false);
-        setPage("login");
+        const stillLoggedIn = hasStoredAuth();
+        setIsLoggedIn(stillLoggedIn);
+        setPage(stillLoggedIn ? "dashboard" : "login");
     };
 
     useIdleTimeout(isLoggedIn, () => {

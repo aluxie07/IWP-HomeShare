@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import NetworkStatusIndicator from "../components/NetworkStatusIndicator";
 import { apiFetch, getNetworkErrorMessage } from "../utils/api";
-import { getUser, saveAuth, clearAuth } from "../utils/authStorage";
+import {
+    getUser,
+    saveAuth,
+    clearAuth,
+    getActiveApiSlot,
+} from "../utils/authStorage";
 
 function Dashboard({
     onRedirectToLogin,
@@ -24,7 +29,7 @@ function Dashboard({
                 const data = await res.json();
 
                 if (res.status === 401) {
-                    clearAuth();
+                    clearAuth(getActiveApiSlot());
                     onRedirectToLogin();
                     return;
                 }
@@ -37,7 +42,7 @@ function Dashboard({
                 setMessage(data.message);
                 if (data.user) {
                     setUser(data.user);
-                    saveAuth(data.user);
+                    saveAuth(data.user, null, getActiveApiSlot());
                 }
                 if (data.network) {
                     setNetwork(data.network);
@@ -58,7 +63,7 @@ function Dashboard({
         } catch {
             // Clear local state even if the network call fails
         }
-        clearAuth();
+        clearAuth(getActiveApiSlot());
         onLogout?.();
     };
 

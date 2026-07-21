@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import AuthHeader from "../components/AuthHeader";
 import GradientPageLayout from "../components/GradientPageLayout";
 import RecaptchaField from "../components/RecaptchaField";
-import { saveAuth } from "../utils/authStorage";
+import { saveAuth, getActiveApiSlot } from "../utils/authStorage";
 import { apiFetch, getApiUrl, getNetworkErrorMessage } from "../utils/api";
 import { getApiMode, getCloudApiUrl, switchToCloudApi } from "../utils/apiDiscovery";
 
@@ -123,11 +123,13 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword, onApiMode
             if (res.ok) {
                 saveAuth(
                     {
+                        id: data.id || data.userId || data.user?.id,
                         username: data.username,
                         email: data.email || email,
                         role: data.role || "user",
                     },
-                    data.token || null
+                    data.token || null,
+                    getActiveApiSlot()
                 );
             } else {
                 setError(data.message || "Invalid credentials");

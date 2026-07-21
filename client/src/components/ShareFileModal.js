@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { getApiUrl, authHeaders } from "../utils/api";
 import { buildShareLink } from "../utils/urlTokens";
 import { canShareFile, getAccessModeLabel } from "../utils/accessModes";
 import { resolveStorageScope } from "../utils/fileStorageScope";
+import { fileApiFetch } from "../utils/mergedLibrary";
 
 function ShareFileModal({ file, onClose, onShareUpdated }) {
     const isLocalFile = resolveStorageScope(file) === "local";
@@ -24,11 +24,9 @@ function ShareFileModal({ file, onClose, onShareUpdated }) {
         setSubmitting(true);
 
         try {
-            const res = await fetch(`${getApiUrl()}/files/${file.id}/share`, {
+            const res = await fileApiFetch(file, "/share", {
                 method: "POST",
-                credentials: "include",
                 headers: {
-                    ...authHeaders(),
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
@@ -65,10 +63,8 @@ function ShareFileModal({ file, onClose, onShareUpdated }) {
         setIsError(false);
 
         try {
-            const res = await fetch(`${getApiUrl()}/files/${file.id}/share`, {
+            const res = await fileApiFetch(file, "/share", {
                 method: "DELETE",
-                credentials: "include",
-                headers: authHeaders(),
             });
 
             const data = await res.json();

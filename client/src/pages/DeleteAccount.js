@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { apiFetch, getNetworkErrorMessage } from "../utils/api";
-import { clearAuth } from "../utils/authStorage";
+import { clearAuth, getActiveApiSlot } from "../utils/authStorage";
 
 function DeleteAccount({ onCancel, onAccountDeleted }) {
     const [password, setPassword] = useState("");
@@ -25,7 +25,7 @@ function DeleteAccount({ onCancel, onAccountDeleted }) {
 
             if (res.status === 401) {
                 if (data.message === "Unauthorized") {
-                    clearAuth();
+                    clearAuth(getActiveApiSlot());
                     onAccountDeleted();
                     return;
                 }
@@ -38,7 +38,7 @@ function DeleteAccount({ onCancel, onAccountDeleted }) {
                 return;
             }
 
-            clearAuth();
+            clearAuth(getActiveApiSlot());
             onAccountDeleted(data.message);
         } catch (err) {
             setError(getNetworkErrorMessage(err));
