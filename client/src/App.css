@@ -1090,6 +1090,58 @@
   width: 100%;
 }
 
+.file-detail-modal__preview .file-doc-preview {
+  width: 100%;
+}
+
+.file-doc-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.file-doc-preview__pdf {
+  width: 100%;
+  height: min(55vh, 480px);
+  border: 1px solid #dde3ea;
+  border-radius: 10px;
+  background: #e8ecf0;
+}
+
+.file-doc-preview__scroll {
+  max-height: min(50vh, 420px);
+  overflow: auto;
+  border: 1px solid #dde3ea;
+  border-radius: 10px;
+  background: #fff;
+  padding: 1rem 1.15rem;
+  font-family: "Jost", sans-serif;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: #1f2937;
+}
+
+.file-doc-preview__scroll:focus-visible {
+  outline: 2px solid #06c;
+  outline-offset: 2px;
+}
+
+.file-doc-preview__scroll p {
+  margin: 0 0 0.75rem;
+}
+
+.file-doc-preview__scroll p:last-child {
+  margin-bottom: 0;
+}
+
+.file-doc-preview__note,
+.file-doc-preview--loading .files-muted,
+.file-doc-preview--error .files-muted {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
 .file-text-preview {
   display: flex;
   flex-direction: column;
@@ -1388,6 +1440,15 @@
   justify-content: flex-start;
   background: #f8fafc;
   padding: 0.35rem 0.4rem;
+}
+
+.file-thumb--pdf .file-thumb__img {
+  object-fit: cover;
+  object-position: top center;
+}
+
+.file-thumb--docx {
+  background: #f4f7fb;
 }
 
 .file-thumb__text {

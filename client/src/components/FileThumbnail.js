@@ -7,6 +7,14 @@ import {
     isTextFile,
     snippetForThumbnail,
 } from "../utils/textFilePreview";
+import {
+    MAX_DOC_THUMB_BYTES,
+    extractDocxThumbnailText,
+    fetchFileBuffer,
+    isDocxFile,
+    isPdfFile,
+    renderPdfThumbnail,
+} from "../utils/documentPreview";
 
 const IMAGE_TYPES = /^(image\/(jpeg|jpg|png|gif|webp|bmp|svg\+xml))$/i;
 const MAX_THUMB_BYTES = 8 * 1024 * 1024;
@@ -28,11 +36,26 @@ function FileThumbnail({ file, onAuthError }) {
         !showImage &&
         isTextFile(file) &&
         (file.fileSize || 0) <= MAX_TEXT_THUMB_BYTES * 8;
+    const showPdf =
+        !showImage &&
+        !showText &&
+        isPdfFile(file) &&
+        (file.fileSize || 0) <= MAX_DOC_THUMB_BYTES;
+    const showDocx =
+        !showImage &&
+        !showText &&
+        !showPdf &&
+        isDocxFile(file) &&
+        (file.fileSize || 0) <= MAX_DOC_THUMB_BYTES;
+
+    const showRich = showImage || showText || showPdf || showDocx;
 
     useEffect(() => {
         if (!showImage || !file?.id) {
-            setSrc("");
-            if (!showText) {
+            if (!showPdf) {
+                setSrc("");
+            }
+            if (!showRich) {
                 setFailed(false);
             }
             return undefined;
@@ -78,13 +101,12 @@ function FileThumbnail({ file, onAuthError }) {
                 URL.revokeObjectURL(objectUrl);
             }
         };
-    }, [file, showImage, showText, onAuthError]);
+    }, [file, showImage, showPdf, showRich, onAuthError]);
 
     useEffect(() => {
         if (!showText || !file?.id) {
-            setTextSnippet("");
-            if (!showImage) {
-                setFailed(false);
+            if (!showDocx) {
+                setTextSnippet("");
             }
             return undefined;
         }
@@ -116,25 +138,112 @@ function FileThumbnail({ file, onAuthError }) {
         return () => {
             cancelled = true;
         };
-    }, [file, showText, showImage, onAuthError]);
+    }, [file, showText, showDocx, onAuthError]);
 
-    if (showImage && src && !failed) {
+    useEffect(() => {
+        if (!showPdf || !file?.id) {
+            return undefined;
+        }
+
+        let cancelled = false;
+
+        (async () => {
+            try {
+                const buffer = await fetchFileBuffer(file, {
+                    maxBytes: MAX_DOC_THUMB_BYTES,
+                    onAuthError,
+                });
+                if (cancelled || !buffer) {
+                    if (!cancelled) {
+                        setFailed(true);
+                    }
+                    return;
+                }
+                const dataUrl = await renderPdfThumbnail(buffer);
+                if (cancelled) {
+                    return;
+                }
+                setSrc(dataUrl);
+                setFailed(false);
+            } catch {
+                if (!cancelled) {
+                    setFailed(true);
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [file, showPdf, onAuthError]);
+
+    useEffect(() => {
+        if (!showDocx || !file?.id) {
+            return undefined;
+        }
+
+        let cancelled = false;
+
+        (async () => {
+            try {
+                const buffer = await fetchFileBuffer(file, {
+                    maxBytes: MAX_DOC_THUMB_BYTES,
+                    onAuthError,
+                });
+                if (cancelled || !buffer) {
+                    if (!cancelled) {
+                        setFailed(true);
+                    }
+                    return;
+                }
+                const snippet = await extractDocxThumbnailText(buffer);
+                if (cancelled) {
+                    return;
+                }
+                if (!snippet) {
+                    setFailed(true);
+                    return;
+                }
+                setTextSnippet(snippet);
+                setFailed(false);
+            } catch {
+                if (!cancelled) {
+                    setFailed(true);
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [file, showDocx, onAuthError]);
+
+    if ((showImage || showPdf) && src && !failed) {
         return (
-            <div className="file-thumb file-thumb--image">
+            <div
+                className={`file-thumb file-thumb--image${
+                    showPdf ? " file-thumb--pdf" : ""
+                }`}
+            >
                 <img src={src} alt="" className="file-thumb__img" />
             </div>
         );
     }
 
-    if (showText && textSnippet && !failed) {
+    if ((showText || showDocx) && textSnippet && !failed) {
         return (
-            <div className="file-thumb file-thumb--text" aria-hidden="true">
+            <div
+                className={`file-thumb file-thumb--text${
+                    showDocx ? " file-thumb--docx" : ""
+                }`}
+                aria-hidden="true"
+            >
                 <pre className="file-thumb__text">{textSnippet}</pre>
             </div>
         );
     }
 
-    if ((showImage || showText) && !failed) {
+    if (showRich && !failed) {
         return (
             <div className="file-thumb file-thumb--loading" aria-hidden="true">
                 <span className="file-thumb__placeholder">…</span>
@@ -144,9 +253,13 @@ function FileThumbnail({ file, onAuthError }) {
 
     const label = isImageFile(file)
         ? "IMG"
-        : isTextFile(file)
-          ? "TXT"
-          : fileExtLabel(file?.filename);
+        : isPdfFile(file)
+          ? "PDF"
+          : isDocxFile(file)
+            ? "DOCX"
+            : isTextFile(file)
+              ? "TXT"
+              : fileExtLabel(file?.filename);
     return (
         <div className="file-thumb file-thumb--icon" aria-hidden="true">
             <span className="file-thumb__placeholder">{label}</span>

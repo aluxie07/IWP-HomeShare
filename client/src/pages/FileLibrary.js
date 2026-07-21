@@ -3,6 +3,7 @@ import NetworkStatusIndicator from "../components/NetworkStatusIndicator";
 import ShareFileModal from "../components/ShareFileModal";
 import FileThumbnail from "../components/FileThumbnail";
 import FileTextPreview from "../components/FileTextPreview";
+import FileDocumentPreview from "../components/FileDocumentPreview";
 import {
     getApiUrl,
     formatFileSize,
@@ -21,6 +22,7 @@ import {
     fileApiFetch,
 } from "../utils/mergedLibrary";
 import { isTextFile } from "../utils/textFilePreview";
+import { isDocumentPreviewFile } from "../utils/documentPreview";
 
 function isLocalApiMode() {
     const mode = getApiMode();
@@ -512,6 +514,11 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                             <div className="file-detail-modal__preview">
                                 {isTextFile(selectedFile) ? (
                                     <FileTextPreview
+                                        file={selectedFile}
+                                        onAuthError={onRedirectToLogin}
+                                    />
+                                ) : isDocumentPreviewFile(selectedFile) ? (
+                                    <FileDocumentPreview
                                         file={selectedFile}
                                         onAuthError={onRedirectToLogin}
                                     />
