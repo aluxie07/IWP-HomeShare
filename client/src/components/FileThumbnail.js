@@ -64,16 +64,7 @@ function FileThumbnail({ file, onAuthError }) {
                 URL.revokeObjectURL(objectUrl);
             }
         };
-    }, [
-        file?.id,
-        file?.apiSource,
-        file?.sourceId,
-        file?.fileType,
-        file?.fileSize,
-        file?.filename,
-        showImage,
-        onAuthError,
-    ]);
+    }, [file, showImage, onAuthError]);
     if (showImage && src && !failed) {
         return (
             <div className="file-thumb file-thumb--image">

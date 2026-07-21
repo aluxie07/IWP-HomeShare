@@ -1,5 +1,4 @@
 import {
-    getApiMode,
     getCloudApiUrl,
     getDiscoveredApiUrl,
     buildApiFetchOptions,
