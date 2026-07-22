@@ -299,7 +299,10 @@ function App() {
                     <Home
                         onGetStarted={() => setPage("register")}
                         onLocalNetworkSetup={() => setPage("local-network-setup")}
+                        onGoToDashboard={() => setPage("dashboard")}
+                        onOpenHelp={() => setPage("help")}
                         showGetStarted={!isLoggedIn}
+                        showLocalWifi={isLoggedIn}
                     />
                 )}
                 {page === "credits" && <Credits onBack={() => setPage("home")} />}
