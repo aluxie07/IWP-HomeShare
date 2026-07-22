@@ -2,6 +2,7 @@ import {
     getCloudApiUrl,
     getDiscoveredApiUrl,
     buildApiFetchOptions,
+    getTargetAddressSpaceCandidates,
     isHttpsPage,
     isLocalOrPrivateApiUrl,
 } from "./apiDiscovery";
@@ -45,7 +46,7 @@ function isNetworkFetchError(err) {
     if (!err) return false;
     if (err.name === "AbortError" || err.name === "TimeoutError") return true;
     if (err instanceof TypeError) return true;
-    return /Failed to fetch|NetworkError|Load failed|aborted|timeout/i.test(
+    return /Failed to fetch|NetworkError|Load failed|aborted|timeout|address space|loopback/i.test(
         String(err.message || err)
     );
 }
@@ -59,10 +60,12 @@ export function getNetworkErrorMessage(err, baseUrl = getApiUrl()) {
 
     if (
         err instanceof TypeError ||
-        /Failed to fetch|NetworkError|Load failed/i.test(String(err?.message || ""))
+        /Failed to fetch|NetworkError|Load failed|address space|loopback/i.test(
+            String(err?.message || "")
+        )
     ) {
         if (isLocalOrPrivateApiUrl(baseUrl)) {
-            return `Cannot reach the local API at ${baseUrl}. Start the local server on this PC and Detect again.`;
+            return `Cannot reach the local API at ${baseUrl}. Keep the HomeShare window open, Allow local/loopback network access if the browser asks, then try again.`;
         }
         return `Cannot reach the API at ${baseUrl}. For Local Network Mode, start the server on this PC (see Local setup) and Detect again. Otherwise confirm REACT_APP_API_URL points to your Render URL.`;
     }
@@ -75,7 +78,7 @@ async function fetchAgainstBaseOnce(
     path,
     options = {},
     slot = null,
-    useAddressSpace = true
+    targetAddressSpace = null
 ) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -88,7 +91,7 @@ async function fetchAgainstBaseOnce(
             : authHeaders(optionHeaders || {});
 
         const probeHints = buildApiFetchOptions(base, REQUEST_TIMEOUT_MS, {
-            useAddressSpace,
+            targetAddressSpace,
         });
         const { signal: _probeSignal, ...fetchHints } = probeHints;
 
@@ -106,29 +109,37 @@ async function fetchAgainstBaseOnce(
 
 async function fetchAgainstBase(baseUrl, path, options = {}, slot = null) {
     const base = String(baseUrl || "").replace(/\/$/, "");
-    const tryPnaFallback = isHttpsPage() && isLocalOrPrivateApiUrl(base);
+    const candidates =
+        isHttpsPage() && isLocalOrPrivateApiUrl(base)
+            ? getTargetAddressSpaceCandidates(base)
+            : [null];
 
-    try {
-        return await fetchAgainstBaseOnce(base, path, options, slot, true);
-    } catch (err) {
-        if (tryPnaFallback && isNetworkFetchError(err)) {
-            try {
-                return await fetchAgainstBaseOnce(base, path, options, slot, false);
-            } catch (retryErr) {
-                const wrapped = new Error(getNetworkErrorMessage(retryErr, base));
-                wrapped.cause = retryErr;
-                wrapped.isNetworkError = true;
-                throw wrapped;
+    let lastError = null;
+
+    for (const targetAddressSpace of candidates) {
+        try {
+            return await fetchAgainstBaseOnce(
+                base,
+                path,
+                options,
+                slot,
+                targetAddressSpace
+            );
+        } catch (err) {
+            lastError = err;
+            if (!isNetworkFetchError(err)) {
+                throw err;
             }
         }
-        if (isNetworkFetchError(err)) {
-            const wrapped = new Error(getNetworkErrorMessage(err, base));
-            wrapped.cause = err;
-            wrapped.isNetworkError = true;
-            throw wrapped;
-        }
-        throw err;
     }
+
+    if (lastError && isNetworkFetchError(lastError)) {
+        const wrapped = new Error(getNetworkErrorMessage(lastError, base));
+        wrapped.cause = lastError;
+        wrapped.isNetworkError = true;
+        throw wrapped;
+    }
+    throw lastError;
 }
 
 export async function apiFetch(path, options = {}) {

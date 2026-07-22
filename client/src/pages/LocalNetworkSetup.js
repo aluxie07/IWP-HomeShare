@@ -22,7 +22,7 @@ function softDetectFailure(detectError) {
     return [
         "Could not connect yet. Check these:",
         "Is the black HomeShare window still open on this PC? (Minimize is OK — don’t close it.)",
-        "Did the browser ask to allow local network access? Click Allow, then try again.",
+        "Did the browser ask to allow local or loopback network access? Click Allow, then try again.",
         "Open this website on the same PC that is running HomeShare.",
         detectError ? `(${detectError})` : "",
     ]

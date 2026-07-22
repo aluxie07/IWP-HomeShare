@@ -101,39 +101,51 @@ function probeTimeoutMs(baseUrl) {
     return PROBE_TIMEOUT_MS;
 }
 
-function buildProbeOptions(baseUrl, { useAddressSpace = true } = {}) {
+function buildProbeOptions(baseUrl, { targetAddressSpace = null } = {}) {
     const options = {
         mode: "cors",
         cache: "no-store",
         signal: AbortSignal.timeout(probeTimeoutMs(baseUrl)),
     };
 
-    if (!useAddressSpace || !isHttpsPage()) {
-        return options;
+    if (targetAddressSpace) {
+        options.targetAddressSpace = targetAddressSpace;
+    }
+
+    return options;
+}
+
+/**
+ * Chrome Local Network Access: public HTTPS → 127.0.0.1 needs "loopback";
+ * LAN IPs need "local". Older Private Network Access used "local"/"private".
+ * Always end with null (no hint) as a last resort.
+ */
+export function getTargetAddressSpaceCandidates(baseUrl) {
+    if (!isHttpsPage()) {
+        return [null];
     }
 
     if (isLoopbackUrl(baseUrl)) {
-        options.targetAddressSpace = "local";
-        return options;
+        return ["loopback", "local", null];
     }
 
     try {
         const host = new URL(baseUrl).hostname;
         if (isPrivateLanHost(host)) {
-            options.targetAddressSpace = "private";
+            return ["local", "private", null];
         }
     } catch {
         // ignore
     }
 
-    return options;
+    return [null];
 }
 
 /** Shared fetch options for LAN/local API calls from HTTPS GitHub Pages */
 export function buildApiFetchOptions(
     baseUrl,
     timeoutMs = probeTimeoutMs(baseUrl),
-    { useAddressSpace = true } = {}
+    { targetAddressSpace = null, useAddressSpace } = {}
 ) {
     const options = {
         mode: "cors",
@@ -141,22 +153,19 @@ export function buildApiFetchOptions(
         signal: AbortSignal.timeout(timeoutMs),
     };
 
-    if (!isHttpsPage() || !useAddressSpace) {
+    // Back-compat: useAddressSpace false means no PNA/LNA hint
+    if (useAddressSpace === false) {
         return options;
     }
 
-    if (isLoopbackUrl(baseUrl)) {
-        options.targetAddressSpace = "local";
-        return options;
+    let space = targetAddressSpace;
+    if (space == null && useAddressSpace !== false && isHttpsPage()) {
+        const candidates = getTargetAddressSpaceCandidates(baseUrl);
+        space = candidates.find((value) => value != null) || null;
     }
 
-    try {
-        const host = new URL(baseUrl).hostname;
-        if (isPrivateLanHost(host)) {
-            options.targetAddressSpace = "private";
-        }
-    } catch {
-        // ignore
+    if (space) {
+        options.targetAddressSpace = space;
     }
 
     return options;
@@ -184,17 +193,14 @@ export async function probeApiDetailed(baseUrl) {
         return { ok: false, error: "empty url" };
     }
 
-    const attempts = isHttpsPage()
-        ? [true, false] // try with PNA hint, then without
-        : [false];
-
+    const attempts = getTargetAddressSpaceCandidates(normalized);
     let lastError = "unreachable";
 
-    for (const useAddressSpace of attempts) {
+    for (const targetAddressSpace of attempts) {
         try {
             const res = await fetch(
                 `${normalized}/health`,
-                buildProbeOptions(normalized, { useAddressSpace })
+                buildProbeOptions(normalized, { targetAddressSpace })
             );
             if (!res.ok) {
                 lastError = `HTTP ${res.status}`;
@@ -207,9 +213,13 @@ export async function probeApiDetailed(baseUrl) {
             lastError = "invalid health response";
         } catch (err) {
             const msg = String(err && err.message ? err.message : err);
-            if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) {
+            if (
+                /Failed to fetch|NetworkError|Load failed|address space|loopback|local network/i.test(
+                    msg
+                )
+            ) {
                 lastError =
-                    "browser blocked or could not reach the server (check Local network access permission, or try on the same PC as the server)";
+                    "browser blocked or could not reach the server (Allow local/loopback network access if asked, and keep HomeShare open on this PC)";
             } else if (/aborted|timeout/i.test(msg)) {
                 if (isLoopbackUrl(normalized)) {
                     lastError = "timed out waiting for the local server";
