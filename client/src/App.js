@@ -28,6 +28,7 @@ import {
     touchSessionActivity,
     clearSessionActivity,
 } from "./utils/idleTimeout";
+import { validateAndPruneSessions } from "./utils/sessionValidate";
 import {
     getVerifyTokenFromUrl,
     getResetTokenFromUrl,
@@ -70,6 +71,7 @@ function App() {
     const [resetToken, setResetToken] = useState(initial.resetToken);
     const [shareToken, setShareToken] = useState(initial.shareToken);
     const [isLoggedIn, setIsLoggedIn] = useState(hasStoredAuth);
+    const [sessionChecked, setSessionChecked] = useState(!hasStoredAuth());
     const [apiDiscovery, setApiDiscovery] = useState({
         mode: "detecting",
         url: "",
@@ -78,13 +80,50 @@ function App() {
     const [exitingLocalMode, setExitingLocalMode] = useState(false);
 
     useEffect(() => {
-        initApiDiscovery().then((result) => {
+        let cancelled = false;
+
+        initApiDiscovery().then(async (result) => {
+            if (cancelled) {
+                return;
+            }
             setApiDiscovery({
                 mode: result.mode,
                 url: result.url,
                 connected: result.connected,
             });
+
+            if (!hasStoredAuth()) {
+                setSessionChecked(true);
+                return;
+            }
+
+            const stillValid = await validateAndPruneSessions();
+            if (cancelled) {
+                return;
+            }
+            setIsLoggedIn(stillValid);
+            setSessionChecked(true);
+            if (!stillValid) {
+                clearSessionActivity();
+                setPage((current) => {
+                    const protectedPages = [
+                        "dashboard",
+                        "delete-account",
+                        "upload",
+                        "library",
+                        "shared-file",
+                    ];
+                    if (protectedPages.includes(current)) {
+                        return "login";
+                    }
+                    return current;
+                });
+            }
         });
+
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     useEffect(() => {
@@ -154,7 +193,7 @@ function App() {
         setPage(stillLoggedIn ? "dashboard" : "login");
     };
 
-    useIdleTimeout(isLoggedIn, () => {
+    useIdleTimeout(isLoggedIn && sessionChecked, () => {
         redirectToLogin();
     });
 

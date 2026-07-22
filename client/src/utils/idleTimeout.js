@@ -63,8 +63,19 @@ export function useIdleTimeout(enabled, onTimeout) {
         }
 
         const start = nowMs();
-        lastActivityRef.current = start;
-        touchSessionActivity();
+        const storedAtStart = getLastActivity();
+        // If the tab was left open past the idle window, log out immediately.
+        // Do not refresh activity first — that hid expired sessions on remount.
+        if (storedAtStart > 0 && start - storedAtStart >= IDLE_TIMEOUT_MS) {
+            clearSessionActivity();
+            onTimeoutRef.current?.();
+            return undefined;
+        }
+
+        lastActivityRef.current = storedAtStart > 0 ? storedAtStart : start;
+        if (!storedAtStart) {
+            touchSessionActivity();
+        }
 
         let throttled = false;
 
