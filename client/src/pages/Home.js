@@ -58,8 +58,6 @@ function Home({
 
                 <div className="home-split__seam" aria-hidden="true">
                     <span className="home-split__seam-line" />
-                    <span className="home-split__same-login">same login</span>
-                    <span className="home-split__seam-line" />
                 </div>
 
                 <button

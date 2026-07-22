@@ -74,13 +74,15 @@
   transform: scale(1.06);
 }
 
-.App .dash-recent-row:hover {
-  transform: scale(1.01);
+.App button.dash-recent-row:hover {
+  transform: scale(1.005);
 }
 
 .App .dash-open-lib-link:hover,
 .App .dash-tip-link:hover,
-.App .lib-modal-close:hover {
+.App .lib-modal-close:hover,
+.App .help-tutorial-trigger:hover,
+.App .help-lightbox__close:hover {
   transform: none;
 }
 
@@ -563,10 +565,10 @@
   gap: 1rem;
   text-align: left;
   padding: 1.5rem 1.35rem;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(64, 61, 136, 0.12);
   border-radius: 16px;
   cursor: pointer;
-  color: #ffffff;
+  color: #403d88;
   min-height: 100%;
   transition: transform 0.18s ease;
 }
@@ -576,17 +578,18 @@
 }
 
 .home-split__panel--online {
-  background: #af719d;
+  background: #f5cbcb;
 }
 
 .home-split__panel--wifi {
-  background: linear-gradient(155deg, #4c4994 0%, #403d88 55%, #35336f 100%);
+  background: #ffe2e2;
 }
 
 .home-split__icon {
   width: 2.4rem;
   height: 2.4rem;
   opacity: 0.95;
+  color: #403d88;
 }
 
 .home-split__panel-copy {
@@ -608,13 +611,13 @@
 }
 
 .home-split__pill--online {
-  background: rgba(64, 61, 136, 0.28);
+  background: rgba(64, 61, 136, 0.14);
   color: #403d88;
 }
 
 .home-split__pill--wifi {
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
+  background: rgba(64, 61, 136, 0.1);
+  color: #403d88;
 }
 
 .home-split__title {
@@ -622,6 +625,7 @@
   font-family: "Jost", sans-serif;
   font-size: 1.35rem;
   font-weight: 700;
+  color: #403d88;
 }
 
 .home-split__desc {
@@ -629,7 +633,7 @@
   font-family: "Jost", sans-serif;
   font-size: 0.95rem;
   line-height: 1.45;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(64, 61, 136, 0.82);
 }
 
 .home-split__cta {
@@ -637,7 +641,7 @@
   font-family: "Jost", sans-serif;
   font-size: 0.95rem;
   font-weight: 700;
-  color: var(--hs-primary);
+  color: #403d88;
 }
 
 .home-split__cta--on-rose {
@@ -645,40 +649,24 @@
 }
 
 .home-split__panel--wifi .home-split__cta {
-  color: var(--hs-primary);
+  color: #403d88;
 }
 
 .home-split__seam {
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
-  gap: 0.55rem;
   padding: 0 0.65rem;
-  min-width: 4.5rem;
+  min-width: 1.5rem;
+  align-self: stretch;
 }
 
 .home-split__seam-line {
-  flex: 1;
+  display: block;
   width: 0;
+  align-self: stretch;
   border-left: 1.5px dashed rgba(255, 255, 255, 0.35);
-  min-height: 1.5rem;
-}
-
-.home-split__same-login {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  padding: 0.45rem 0.35rem;
-  border-radius: 999px;
-  border: 1px solid rgba(248, 178, 178, 0.55);
-  background: rgba(64, 61, 136, 0.65);
-  font-family: "Jost", sans-serif;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--hs-primary);
-  white-space: nowrap;
+  min-height: 100%;
 }
 
 .home-steps-strip {
@@ -824,23 +812,17 @@
   }
 
   .home-split__seam {
-    flex-direction: row;
     min-width: 0;
-    padding: 0.15rem 0;
+    padding: 0.35rem 0;
+    width: 100%;
   }
 
   .home-split__seam-line {
-    flex: 1;
-    width: auto;
+    width: 100%;
     min-height: 0;
     height: 0;
     border-left: none;
     border-top: 1.5px dashed rgba(255, 255, 255, 0.35);
-  }
-
-  .home-split__same-login {
-    writing-mode: horizontal-tb;
-    transform: none;
   }
 
   .home-steps-strip {
@@ -918,26 +900,47 @@
 .help-page {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 1rem;
   padding-bottom: 2rem;
 }
 
 .help-page-card {
-  max-width: 720px;
-  width: 100%;
+  width: auto;
+  max-width: min(720px, 100%);
   margin-left: auto;
   margin-right: auto;
   text-align: left;
   background: var(--hs-card);
   border: 1px solid var(--hs-border);
+  height: auto;
 }
 
 .help-page-card--header {
   text-align: center;
+  width: 100%;
+  max-width: min(720px, 100%);
 }
 
 .help-section-card {
   scroll-margin-top: 1.25rem;
+  width: fit-content;
+  max-width: 100%;
+  height: auto;
+}
+
+.help-section-card--online {
+  max-width: min(760px, 100%);
+}
+
+.help-section-card--local {
+  max-width: min(1080px, 100%);
+}
+
+.help-section-card--text {
+  width: 30%;
+  max-width: 30%;
+  min-width: min(280px, 100%);
 }
 
 .help-section-card--focus {
@@ -952,6 +955,157 @@
 
 .help-section .files-section-title {
   margin-bottom: 0.4rem;
+}
+
+.help-section-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 280px);
+  gap: 1.25rem 1.5rem;
+  align-items: start;
+  margin-top: 0.65rem;
+}
+
+.help-section-split--cloud {
+  align-items: center;
+  gap: 0.875rem 1.05rem;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 280px);
+}
+
+.help-section-split--cloud .help-section-split__copy .files-muted {
+  margin-bottom: 0.45rem;
+}
+
+.help-section-split--cloud .help-list {
+  margin: 0.35rem 0 0;
+}
+
+.help-section-split--cloud .help-list li {
+  margin-bottom: 0.28rem;
+}
+
+.help-section-split--local {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+  align-items: center;
+}
+
+.help-section-split__copy .files-muted {
+  margin-bottom: 0.65rem;
+}
+
+.help-section-split__copy .auth-form__secondary-btn {
+  margin-top: 0.85rem;
+}
+
+.help-tutorial-trigger {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+  color: inherit;
+  font: inherit;
+  width: 100%;
+  max-width: 100%;
+}
+
+.help-tutorial-trigger:hover {
+  transform: none;
+}
+
+.help-tutorial-trigger:hover .help-tutorial-img {
+  border-color: rgba(236, 233, 249, 0.4);
+}
+
+.help-tutorial-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0;
+  border-radius: 12px;
+  border: 1px solid var(--hs-border);
+  pointer-events: none;
+}
+
+.help-tutorial-caption {
+  font-family: "Jost", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--hs-text-muted);
+  letter-spacing: 0.01em;
+}
+
+.help-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(10, 8, 26, 0.82);
+  backdrop-filter: blur(3px);
+  cursor: zoom-out;
+}
+
+.help-lightbox__img {
+  display: block;
+  max-width: min(1100px, 94vw);
+  max-height: 88vh;
+  width: auto;
+  height: auto;
+  border-radius: 14px;
+  border: 1px solid var(--hs-border);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  cursor: default;
+}
+
+.help-lightbox__close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1;
+  margin: 0;
+  padding: 0.35rem 0.55rem;
+  border: none;
+  background: none;
+  color: var(--hs-mist);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.help-lightbox__close:hover {
+  color: #fff;
+  transform: none;
+}
+
+@media (max-width: 720px) {
+  .help-section-card--online,
+  .help-section-card--local {
+    width: 100%;
+  }
+
+  .help-section-card--text {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .help-section-split,
+  .help-section-split--cloud,
+  .help-section-split--local {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .help-tutorial-trigger {
+    max-width: 360px;
+    margin: 0 auto;
+    justify-self: center;
+  }
 }
 
 .help-list {
@@ -1322,7 +1476,6 @@
 
 .dash-recent-row:hover {
   background: rgba(236, 233, 249, 0.05);
-  transform: scale(1.01);
 }
 
 .dash-rf-icon {
@@ -2138,7 +2291,7 @@
 }
 
 .success {
-  color: #a5d6a7;
+  color: #c7eabb;
   margin: 0;
 }
 
@@ -3127,7 +3280,7 @@
 }
 
 .network-status--trusted .network-status__dot {
-  background: #2e7d32;
+  background: #c7eabb;
 }
 
 .network-status--restricted .network-status__dot {
@@ -3310,12 +3463,14 @@
 }
 
 .local-setup-check-step--complete {
-  border-color: #a5d6a7;
+  border-color: #c7eabb;
   background: var(--hs-surface-raised);
 }
 
-.local-setup-check-step--done .local-setup-check-num {
-  background: #2e7d32;
+.local-setup-check-step--done .local-setup-check-num,
+.local-setup-check-step--complete .local-setup-check-num {
+  background: #c7eabb;
+  color: #403d88;
 }
 
 .local-setup-check-title {
@@ -3456,7 +3611,7 @@
 
 .local-setup-status--active {
   background: var(--hs-surface-raised);
-  border: 1px solid #a5d6a7;
+  border: 1px solid #c7eabb;
 }
 
 .local-setup-status--inactive {
