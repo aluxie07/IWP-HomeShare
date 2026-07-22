@@ -179,6 +179,12 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword, onApiMode
             <div className="auth-card">
                 <form className="auth-form" onSubmit={handleLogin}>
                     <AuthHeader title="Login" />
+                    {showUseCloud && (
+                        <p className="files-muted login-local-banner" role="status">
+                            You’re connecting to <strong>This Wi‑Fi</strong> on this PC. Log in
+                            or create an account here (your Online/cloud login is separate).
+                        </p>
+                    )}
                     <input
                         type="email"
                         placeholder="Email"
@@ -214,7 +220,7 @@ function Login({ onLoginSuccess, onSwitchToRegister, onForgotPassword, onApiMode
                             onClick={handleUseCloud}
                             disabled={switchingCloud}
                         >
-                            {switchingCloud ? "Switching…" : "Use cloud API instead"}
+                            {switchingCloud ? "Switching…" : "Use Online (Cloud) instead"}
                         </button>
                     )}
                     <div className="message-area">

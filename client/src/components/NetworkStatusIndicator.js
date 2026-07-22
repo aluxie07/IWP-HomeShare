@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getApiUrl, authHeaders } from "../utils/api";
+import { apiFetch } from "../utils/api";
 
 function NetworkStatusIndicator({ compact = false, initialStatus = null }) {
     const [status, setStatus] = useState(initialStatus);
@@ -17,11 +17,17 @@ function NetworkStatusIndicator({ compact = false, initialStatus = null }) {
 
         async function load() {
             try {
-                const res = await fetch(`${getApiUrl()}/network/status`, {
-                    credentials: "include",
-                    headers: authHeaders(),
+                const res = await apiFetch("/network/status", {
                     cache: "no-store",
                 });
+
+                if (res.status === 401) {
+                    if (!cancelled) {
+                        setError("Sign in to see your connection details");
+                        setStatus(null);
+                    }
+                    return;
+                }
 
                 if (!res.ok) {
                     if (!cancelled) {
@@ -33,6 +39,7 @@ function NetworkStatusIndicator({ compact = false, initialStatus = null }) {
                 const data = await res.json();
                 if (!cancelled) {
                     setStatus(data);
+                    setError("");
                 }
             } catch {
                 if (!cancelled) {

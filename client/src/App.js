@@ -19,6 +19,7 @@ import Help from "./pages/Help";
 import { initApiDiscovery, switchToCloudApi } from "./utils/apiDiscovery";
 import {
     isLoggedIn as hasStoredAuth,
+    isLoggedInToActiveApi,
     clearAuth,
     getActiveApiSlot,
 } from "./utils/authStorage";
@@ -70,7 +71,7 @@ function App() {
     const [verifyToken, setVerifyToken] = useState(initial.verifyToken);
     const [resetToken, setResetToken] = useState(initial.resetToken);
     const [shareToken, setShareToken] = useState(initial.shareToken);
-    const [isLoggedIn, setIsLoggedIn] = useState(hasStoredAuth);
+    const [isLoggedIn, setIsLoggedIn] = useState(() => isLoggedInToActiveApi());
     const [sessionChecked, setSessionChecked] = useState(!hasStoredAuth());
     const [apiDiscovery, setApiDiscovery] = useState({
         mode: "detecting",
@@ -78,6 +79,16 @@ function App() {
         connected: false,
     });
     const [exitingLocalMode, setExitingLocalMode] = useState(false);
+
+    const applyDiscoveryResult = (result) => {
+        setApiDiscovery({
+            mode: result.mode,
+            url: result.url,
+            connected: result.connected,
+        });
+        // Mode change switches which session is valid (cloud JWT ≠ local JWT)
+        setIsLoggedIn(isLoggedInToActiveApi());
+    };
 
     useEffect(() => {
         let cancelled = false;
@@ -93,17 +104,19 @@ function App() {
             });
 
             if (!hasStoredAuth()) {
+                setIsLoggedIn(false);
                 setSessionChecked(true);
                 return;
             }
 
-            const stillValid = await validateAndPruneSessions();
+            await validateAndPruneSessions();
             if (cancelled) {
                 return;
             }
-            setIsLoggedIn(stillValid);
+            const activeOk = isLoggedInToActiveApi();
+            setIsLoggedIn(activeOk);
             setSessionChecked(true);
-            if (!stillValid) {
+            if (!activeOk) {
                 clearSessionActivity();
                 setPage((current) => {
                     const protectedPages = [
@@ -188,9 +201,9 @@ function App() {
         // Clear only the active API session so the other side stays linked
         clearAuth(getActiveApiSlot());
         clearSessionActivity();
-        const stillLoggedIn = hasStoredAuth();
-        setIsLoggedIn(stillLoggedIn);
-        setPage(stillLoggedIn ? "dashboard" : "login");
+        const activeOk = isLoggedInToActiveApi();
+        setIsLoggedIn(activeOk);
+        setPage(activeOk ? "dashboard" : "login");
     };
 
     useIdleTimeout(isLoggedIn && sessionChecked, () => {
@@ -222,14 +235,14 @@ function App() {
             "library",
             "shared-file",
         ];
-        if (protectedPages.includes(page) && !hasStoredAuth()) {
+        if (protectedPages.includes(page) && !isLoggedInToActiveApi()) {
             if (page === "shared-file" && shareToken) {
                 setPendingShare(shareToken);
                 ensureShareInUrl(shareToken);
             }
             setPage("login");
         }
-    }, [page, shareToken]);
+    }, [page, shareToken, apiDiscovery.mode]);
 
     return (
         <div className="App">
@@ -241,21 +254,21 @@ function App() {
                 onLogoClick={() => setPage("home")}
                 onHomeClick={() => setPage("home")}
                 onDashboardClick={() => {
-                    if (!hasStoredAuth()) {
+                    if (!isLoggedInToActiveApi()) {
                         setPage("login");
                         return;
                     }
                     setPage("dashboard");
                 }}
                 onUploadClick={() => {
-                    if (!hasStoredAuth()) {
+                    if (!isLoggedInToActiveApi()) {
                         setPage("login");
                         return;
                     }
                     setPage("upload");
                 }}
                 onLibraryClick={() => {
-                    if (!hasStoredAuth()) {
+                    if (!isLoggedInToActiveApi()) {
                         setPage("login");
                         return;
                     }
@@ -266,11 +279,7 @@ function App() {
                     setExitingLocalMode(true);
                     try {
                         const result = await switchToCloudApi();
-                        setApiDiscovery({
-                            mode: result.mode,
-                            url: result.url,
-                            connected: result.connected,
-                        });
+                        applyDiscoveryResult(result);
                     } catch {
                         // keep current mode if cloud switch fails
                     } finally {
@@ -306,11 +315,7 @@ function App() {
                         onSwitchToRegister={() => setPage("register")}
                         onForgotPassword={() => setPage("forgot-password")}
                         onApiModeChanged={(result) => {
-                            setApiDiscovery({
-                                mode: result.mode,
-                                url: result.url,
-                                connected: result.connected,
-                            });
+                            applyDiscoveryResult(result);
                         }}
                     />
                 )}
@@ -351,13 +356,7 @@ function App() {
                 {page === "local-network-setup" && (
                     <LocalNetworkSetup
                         onBack={() => setPage(isLoggedIn ? "dashboard" : "home")}
-                        onDiscoveryUpdated={(result) =>
-                            setApiDiscovery({
-                                mode: result.mode,
-                                url: result.url,
-                                connected: result.connected,
-                            })
-                        }
+                        onDiscoveryUpdated={applyDiscoveryResult}
                         onGoToLogin={() => setPage("login")}
                         onGoToRegister={() => setPage("register")}
                         onGoToLibrary={() => setPage("library")}

@@ -1,17 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import NetworkStatusIndicator from "../components/NetworkStatusIndicator";
-import { getApiUrl, authHeaders, formatFileSize, formatUploadDate } from "../utils/api";
+import { apiFetch, formatFileSize, formatUploadDate } from "../utils/api";
 import { ACCESS_MODES, getAccessModeLabel } from "../utils/accessModes";
 import { getStorageScopeLabel } from "../utils/fileStorageScope";
 
 const FIVE_GB = 5 * 1024 * 1024 * 1024;
 
 async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLogin }) {
-    const initRes = await fetch(`${getApiUrl()}/files/upload/init`, {
+    const initRes = await apiFetch("/files/upload/init", {
         method: "POST",
-        credentials: "include",
         headers: {
-            ...authHeaders(),
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -40,13 +38,11 @@ async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLo
             const end = Math.min(start + chunkSize, file.size);
             const blob = file.slice(start, end);
 
-            const chunkRes = await fetch(
-                `${getApiUrl()}/files/upload/${uploadId}/chunks/${index}`,
+            const chunkRes = await apiFetch(
+                `/files/upload/${uploadId}/chunks/${index}`,
                 {
                     method: "PUT",
-                    credentials: "include",
                     headers: {
-                        ...authHeaders(),
                         "Content-Type": "application/octet-stream",
                     },
                     body: blob,
@@ -66,10 +62,8 @@ async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLo
             onProgress?.(Math.round(((index + 1) / chunkCount) * 100));
         }
 
-        const doneRes = await fetch(`${getApiUrl()}/files/upload/${uploadId}/complete`, {
+        const doneRes = await apiFetch(`/files/upload/${uploadId}/complete`, {
             method: "POST",
-            credentials: "include",
-            headers: authHeaders(),
         });
 
         if (doneRes.status === 401) {
@@ -85,10 +79,8 @@ async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLo
         return doneData;
     } catch (err) {
         if (err.message !== "UNAUTHORIZED") {
-            fetch(`${getApiUrl()}/files/upload/${uploadId}`, {
+            apiFetch(`/files/upload/${uploadId}`, {
                 method: "DELETE",
-                credentials: "include",
-                headers: authHeaders(),
             }).catch(() => {});
         }
         throw err;
@@ -108,9 +100,8 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
     const loadFiles = useCallback(async () => {
         setLoadingList(true);
         try {
-            const res = await fetch(`${getApiUrl()}/files`, {
-                credentials: "include",
-                headers: authHeaders(),
+            const res = await apiFetch("/files", {
+                cache: "no-store",
             });
 
             if (res.status === 401) {

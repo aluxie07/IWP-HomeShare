@@ -168,13 +168,15 @@ export function getSessionTokenForSlot(slot) {
 
 /** Active-slot user (header / dashboard). */
 export function getUser() {
-    return getUserForSlot(getActiveApiSlot()) || readUser(LEGACY_USER_KEY);
+    return getUserForSlot(getActiveApiSlot());
 }
 
-/** Active-slot Bearer token. */
+/**
+ * Bearer token for the active API only.
+ * Never fall back to the other mode's token — cloud JWTs are rejected by the local server (401).
+ */
 export function getSessionToken() {
-    const slot = getActiveApiSlot();
-    return getSessionTokenForSlot(slot) || sessionStorage.getItem(LEGACY_TOKEN_KEY) || "";
+    return getSessionTokenForSlot(getActiveApiSlot());
 }
 
 export function clearSessionToken() {
@@ -183,12 +185,18 @@ export function clearSessionToken() {
     sessionStorage.removeItem(LOCAL_TOKEN_KEY);
 }
 
+/** True if any cloud or local session exists (for dual-library linking). */
 export function isLoggedIn() {
-    return Boolean(getUserForSlot("cloud") || getUserForSlot("local") || getUser());
+    return Boolean(getUserForSlot("cloud") || getUserForSlot("local"));
 }
 
 export function isLoggedInToSlot(slot) {
     return Boolean(getUserForSlot(slot));
+}
+
+/** True if signed in for the API mode currently in use (cloud vs local). */
+export function isLoggedInToActiveApi() {
+    return isLoggedInToSlot(getActiveApiSlot());
 }
 
 export function isAdmin() {
