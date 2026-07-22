@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import NetworkStatusIndicator from "../components/NetworkStatusIndicator";
 import ShareFileModal from "../components/ShareFileModal";
 import FileThumbnail from "../components/FileThumbnail";
 import FileTextPreview from "../components/FileTextPreview";
@@ -27,6 +26,29 @@ import { isDocumentPreviewFile } from "../utils/documentPreview";
 function isLocalApiMode() {
     const mode = getApiMode();
     return mode === "local" || mode === "manual";
+}
+
+function shortFileType(file) {
+    const name = file?.filename || "";
+    const dot = name.lastIndexOf(".");
+    if (dot < 0) {
+        return "FILE";
+    }
+    const ext = name.slice(dot + 1).toUpperCase();
+    return ext.slice(0, 4) || "FILE";
+}
+
+function filterLabel(value) {
+    if (value === "all") {
+        return "All";
+    }
+    if (value === "cloud") {
+        return "Cloud";
+    }
+    if (value === "local") {
+        return "Local";
+    }
+    return value;
 }
 
 function mergeServerFileIntoTagged(existing, serverFile) {
@@ -328,55 +350,43 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         }
     };
 
+    const isEmptyLibrary =
+        !loading && !error && activeFiles.length === 0 && deletedFiles.length === 0;
+
     return (
-        <section className="dashboard-page dashboard-page--wide">
-            <div className="dashboard-card files-page-card files-page-card--grid">
-                <div className="files-section-header">
-                    <h2 className="auth-title">File library</h2>
-                    <div className="files-section-header-actions">
+        <section className="dashboard-page dashboard-page--wide lib-page">
+            <div className="lib-card">
+                <div className="lib-header">
+                    <div>
+                        <h2 className="lib-title">File library</h2>
+                        <p className="lib-intro">
+                            Click any file to preview it, change who can see it, or send a share
+                            link. Removed files stay listed below for a while, so nothing
+                            disappears without a trace.
+                        </p>
+                    </div>
+                    <div className="lib-header-actions">
                         <button
                             type="button"
-                            className="file-download-btn"
+                            className="lib-btn-ghost"
                             onClick={handleRefresh}
                             disabled={refreshing || loading}
                         >
                             {refreshing ? "Refreshing…" : "Refresh"}
                         </button>
-                        <button type="button" className="logout-btn files-upload-nav-btn" onClick={onGoToUpload}>
-                            Upload file
+                        <button
+                            type="button"
+                            className="lib-btn-upload-sm"
+                            onClick={onGoToUpload}
+                        >
+                            Upload
                         </button>
                     </div>
                 </div>
-                <p className="files-page-intro">
-                    Click a file to change access, share, download, or delete. Deletion keeps a
-                    history entry with who uploaded and who removed it.
-                </p>
-
-                <NetworkStatusIndicator compact />
 
                 {!loading && linkBanner && (
-                    <p className="library-link-banner" role="status">
-                        {linkBanner}
-                    </p>
-                )}
-
-                {!loading && !error && activeFiles.length > 0 && (
-                    <div className="file-library-filters" role="group" aria-label="Filter by storage">
-                        {STORAGE_FILTERS.map((option) => (
-                            <button
-                                key={option.value}
-                                type="button"
-                                className={`file-library-filter-btn ${
-                                    storageFilter === option.value
-                                        ? "file-library-filter-btn--active"
-                                        : ""
-                                }`}
-                                aria-pressed={storageFilter === option.value}
-                                onClick={() => setStorageFilter(option.value)}
-                            >
-                                {option.label}
-                            </button>
-                        ))}
+                    <div className="lib-link-banner" role="status">
+                        <span>{linkBanner}</span>
                     </div>
                 )}
 
@@ -384,99 +394,151 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                 {error && <p className="error">{error}</p>}
                 {!error && syncNote && <p className="files-muted">{syncNote}</p>}
 
-                {!loading && !error && activeFiles.length === 0 && deletedFiles.length === 0 && (
-                    <p className="files-muted">
-                        You have not uploaded any files yet.{" "}
-                        <button type="button" className="files-link-btn" onClick={onGoToUpload}>
-                            Upload your first file
-                        </button>
-                    </p>
+                {!loading && !error && activeFiles.length > 0 && (
+                    <div className="lib-filters" role="group" aria-label="Filter by storage">
+                        {STORAGE_FILTERS.map((option) => (
+                            <button
+                                key={option.value}
+                                type="button"
+                                className={`lib-pill ${
+                                    storageFilter === option.value ? "lib-pill--active" : ""
+                                }`}
+                                aria-pressed={storageFilter === option.value}
+                                onClick={() => setStorageFilter(option.value)}
+                            >
+                                {filterLabel(option.value)}
+                            </button>
+                        ))}
+                    </div>
                 )}
 
-                {!loading && !error && activeFiles.length > 0 && filteredActiveFiles.length === 0 && (
-                    <p className="files-muted">
-                        No {storageFilter === "cloud" ? "cloud" : "local"} files in your library.{" "}
-                        <button
-                            type="button"
-                            className="files-link-btn"
-                            onClick={() => setStorageFilter("all")}
-                        >
-                            Show all files
-                        </button>
-                    </p>
-                )}
+                {!loading &&
+                    !error &&
+                    activeFiles.length > 0 &&
+                    filteredActiveFiles.length === 0 && (
+                        <p className="files-muted">
+                            No {storageFilter === "cloud" ? "cloud" : "local"} files in your
+                            library.{" "}
+                            <button
+                                type="button"
+                                className="files-link-btn"
+                                onClick={() => setStorageFilter("all")}
+                            >
+                                Show all files
+                            </button>
+                        </p>
+                    )}
 
                 {!loading && filteredActiveFiles.length > 0 && (
-                    <div className="file-grid" role="list">
+                    <div className="lib-grid" role="list">
                         {filteredActiveFiles.map((file) => {
                             const scope = resolveStorageScope(file, {
                                 preferLocal: preferLocalLabels,
                             });
+                            const scopeClass = scope === "local" ? "local" : "cloud";
                             return (
-                            <button
-                                key={file.id}
-                                type="button"
-                                role="listitem"
-                                className="file-grid-tile"
-                                onClick={() => setSelectedFileId(file.id)}
-                            >
-                                <span
-                                    className={`file-grid-tile__storage-badge file-grid-tile__storage-badge--${
-                                        scope === "local" ? "local" : "cloud"
-                                    }`}
+                                <button
+                                    key={file.id}
+                                    type="button"
+                                    role="listitem"
+                                    className="lib-tile"
+                                    onClick={() => setSelectedFileId(file.id)}
                                 >
-                                    {getStorageScopeLabel(scope)}
-                                </span>
-                                <FileThumbnail file={file} onAuthError={onRedirectToLogin} />
-                                <span className="file-grid-tile__body">
-                                    <span className="file-grid-tile__name" title={file.filename}>
-                                        {file.filename}
-                                    </span>
-                                    <span className="file-grid-tile__meta">
-                                        {file.uploadedBy || "Unknown"}
-                                    </span>
-                                    {(file.accessMode === "local_only" || file.share) && (
-                                        <span className="file-grid-tile__badges">
-                                            {file.accessMode === "local_only" && (
-                                                <span className="file-list-access-badge file-list-access-badge--local">
-                                                    LAN only
-                                                </span>
-                                            )}
-                                            {file.share && (
-                                                <span className="file-list-share-badge">Shared</span>
-                                            )}
+                                    <div className="lib-thumb">
+                                        <span
+                                            className={`lib-storage-badge lib-storage-badge--${scopeClass}`}
+                                        >
+                                            {getStorageScopeLabel(scope)}
                                         </span>
-                                    )}
-                                </span>
-                            </button>
+                                        <FileThumbnail
+                                            file={file}
+                                            onAuthError={onRedirectToLogin}
+                                        />
+                                        <span className="lib-thumb-fallback" aria-hidden="true">
+                                            {shortFileType(file)}
+                                        </span>
+                                    </div>
+                                    <div className="lib-tile-body">
+                                        <span
+                                            className={`lib-tile-storage-inline lib-tile-storage-inline--${scopeClass}`}
+                                        >
+                                            {getStorageScopeLabel(scope)}
+                                        </span>
+                                        <span
+                                            className="lib-tile-name"
+                                            title={file.filename}
+                                        >
+                                            {file.filename}
+                                        </span>
+                                        <span className="lib-tile-meta">
+                                            by {file.uploadedBy || "Unknown"}
+                                        </span>
+                                        {(file.accessMode === "local_only" || file.share) && (
+                                            <span className="lib-chips">
+                                                {file.accessMode === "local_only" && (
+                                                    <span className="lib-chip lib-chip--lan">
+                                                        LAN only
+                                                    </span>
+                                                )}
+                                                {file.share && (
+                                                    <span className="lib-chip lib-chip--shared">
+                                                        Shared
+                                                    </span>
+                                                )}
+                                            </span>
+                                        )}
+                                    </div>
+                                </button>
                             );
                         })}
                     </div>
                 )}
 
-                {!loading && deletedFiles.length > 0 && (
-                    <div className="file-deletion-log">
-                        <h3 className="files-section-title">Deletion log</h3>
-                        <p className="files-muted">
-                            Files removed from storage. Click an entry for details.
+                {isEmptyLibrary && (
+                    <div className="lib-empty-card">
+                        <h3>No files yet</h3>
+                        <p>
+                            Upload something to start your library — it&apos;ll show up here right
+                            away.
                         </p>
-                        <div className="file-grid file-grid--deleted" role="list">
+                        <button
+                            type="button"
+                            className="lib-btn-upload-sm"
+                            onClick={onGoToUpload}
+                        >
+                            Upload a file
+                        </button>
+                    </div>
+                )}
+
+                {!loading && deletedFiles.length > 0 && (
+                    <div className="lib-deletion-log">
+                        <p className="lib-section-title">Deletion log</p>
+                        <div className="lib-deleted-grid" role="list">
                             {deletedFiles.map((file) => (
                                 <button
                                     key={file.id}
                                     type="button"
                                     role="listitem"
-                                    className="file-grid-tile file-grid-tile--deleted"
+                                    className="lib-tile lib-tile--deleted"
                                     onClick={() => setSelectedFileId(file.id)}
                                 >
-                                    <span className="file-grid-tile__body">
-                                        <span className="file-grid-tile__name" title={file.filename}>
+                                    <div className="lib-thumb">
+                                        <span className="lib-thumb-fallback" aria-hidden="true">
+                                            {shortFileType(file)}
+                                        </span>
+                                    </div>
+                                    <div className="lib-tile-body">
+                                        <span
+                                            className="lib-tile-name"
+                                            title={file.filename}
+                                        >
                                             {file.filename}
                                         </span>
-                                        <span className="file-grid-tile__meta">
+                                        <span className="lib-tile-meta">
                                             Deleted by {file.deletedBy || "Unknown"}
                                         </span>
-                                    </span>
+                                    </div>
                                 </button>
                             ))}
                         </div>
@@ -491,27 +553,35 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                     role="presentation"
                 >
                     <div
-                        className="modal-card file-detail-modal"
+                        className="modal-card file-detail-modal lib-detail-modal"
                         role="dialog"
                         aria-modal="true"
                         aria-labelledby="file-detail-title"
                         onClick={(event) => event.stopPropagation()}
                     >
-                        <div className="file-detail-modal__header">
-                            <h3 id="file-detail-title" className="modal-title">
-                                {selectedFile.filename}
-                            </h3>
+                        <div className="lib-modal-top">
+                            <div>
+                                <h3 id="file-detail-title" className="modal-title">
+                                    {selectedFile.filename}
+                                </h3>
+                                <p className="lib-modal-meta">
+                                    {selectedFile.deleted
+                                        ? `Deleted by ${selectedFile.deletedBy || "Unknown"} · ${formatUploadDate(selectedFile.deletedAt)}`
+                                        : `Uploaded by ${selectedFile.uploadedBy || "Unknown"} · ${formatUploadDate(selectedFile.uploadDate)} · ${formatFileSize(selectedFile.fileSize)}`}
+                                </p>
+                            </div>
                             <button
                                 type="button"
-                                className="files-link-btn"
+                                className="lib-modal-close"
                                 onClick={() => setSelectedFileId(null)}
+                                aria-label="Close"
                             >
-                                Close
+                                ✕
                             </button>
                         </div>
 
                         {!selectedFile.deleted && (
-                            <div className="file-detail-modal__preview">
+                            <div className="file-detail-modal__preview lib-modal-preview">
                                 {isTextFile(selectedFile) ? (
                                     <FileTextPreview
                                         file={selectedFile}
@@ -531,42 +601,50 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                             </div>
                         )}
 
-                        <div className="file-detail-modal__meta">
-                            {!selectedFile.deleted && (() => {
+                        {!selectedFile.deleted &&
+                            (() => {
                                 const scope = resolveStorageScope(selectedFile, {
                                     preferLocal: preferLocalLabels,
                                 });
+                                const scopeClass = scope === "local" ? "local" : "cloud";
                                 return (
-                                <p>
-                                    <span className="file-detail-label">Storage</span>
                                     <span
-                                        className={`file-grid-tile__storage-badge file-grid-tile__storage-badge--${
-                                            scope === "local" ? "local" : "cloud"
-                                        } file-grid-tile__storage-badge--inline`}
+                                        className={`lib-modal-storage lib-modal-storage--${scopeClass}`}
                                     >
-                                        {getStorageScopeLabel(scope)}
+                                        ● {getStorageScopeLabel(scope)}
+                                        {scope === "local" ? " · This Wi‑Fi" : " · Online"}
                                     </span>
-                                </p>
                                 );
                             })()}
+
+                        <div className="lib-meta-grid">
+                            <div className="lib-meta-item">
+                                <p className="lib-meta-label">Uploader</p>
+                                <p className="lib-meta-value">
+                                    {selectedFile.uploadedBy || "Unknown"}
+                                </p>
+                            </div>
+                            <div className="lib-meta-item">
+                                <p className="lib-meta-label">Uploaded</p>
+                                <p className="lib-meta-value">
+                                    {formatUploadDate(selectedFile.uploadDate)}
+                                </p>
+                            </div>
                             {!selectedFile.deleted && (
-                                <p>
-                                    <span className="file-detail-label">Type / size</span>
-                                    {selectedFile.fileType} ·{" "}
-                                    {formatFileSize(selectedFile.fileSize)}
-                                </p>
-                            )}
-                            <p>
-                                <span className="file-detail-label">Uploaded by</span>
-                                {selectedFile.uploadedBy || "Unknown"} ·{" "}
-                                {formatUploadDate(selectedFile.uploadDate)}
-                            </p>
-                            {selectedFile.deleted && (
-                                <p>
-                                    <span className="file-detail-label">Deleted by</span>
-                                    {selectedFile.deletedBy || "Unknown"} ·{" "}
-                                    {formatUploadDate(selectedFile.deletedAt)}
-                                </p>
+                                <>
+                                    <div className="lib-meta-item">
+                                        <p className="lib-meta-label">Size</p>
+                                        <p className="lib-meta-value">
+                                            {formatFileSize(selectedFile.fileSize)}
+                                        </p>
+                                    </div>
+                                    <div className="lib-meta-item">
+                                        <p className="lib-meta-label">Type</p>
+                                        <p className="lib-meta-value">
+                                            {selectedFile.fileType || shortFileType(selectedFile)}
+                                        </p>
+                                    </div>
+                                </>
                             )}
                         </div>
 
@@ -577,10 +655,10 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                             </p>
                         ) : (
                             <>
-                                <label className="file-access-mode-inline file-detail-access">
-                                    <span className="file-access-mode-inline-label">Access mode</span>
+                                <div className="lib-access-wrap">
+                                    <p className="lib-meta-label">Access</p>
                                     <select
-                                        className="file-access-mode-select"
+                                        className="lib-access-select"
                                         value={selectedFile.accessMode || "private"}
                                         disabled={updatingModeId === selectedFile.id}
                                         onChange={(e) =>
@@ -596,7 +674,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                             </option>
                                         ))}
                                     </select>
-                                </label>
+                                </div>
                                 {selectedFile.accessMode === "local_only" && (
                                     <p className="files-muted file-detail-local-only-note">
                                         Local Only range:{" "}
@@ -605,10 +683,10 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                     </p>
                                 )}
 
-                                <div className="file-list-actions file-detail-actions">
+                                <div className="lib-modal-actions">
                                     <button
                                         type="button"
-                                        className="file-share-btn"
+                                        className="lib-m-btn lib-m-btn--primary"
                                         onClick={() => setShareFile(selectedFile)}
                                         disabled={!canShareFile(selectedFile)}
                                         title={
@@ -621,14 +699,14 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                     </button>
                                     <button
                                         type="button"
-                                        className="file-download-btn"
+                                        className="lib-m-btn"
                                         onClick={() => handleDownload(selectedFile)}
                                     >
                                         Download
                                     </button>
                                     <button
                                         type="button"
-                                        className="share-revoke-btn"
+                                        className="lib-m-btn lib-m-btn--danger"
                                         onClick={() => handleDelete(selectedFile)}
                                         disabled={deletingId === selectedFile.id}
                                     >

@@ -79,6 +79,12 @@ function App() {
         connected: false,
     });
     const [exitingLocalMode, setExitingLocalMode] = useState(false);
+    const [helpFocus, setHelpFocus] = useState(null);
+
+    const openHelp = (section = null) => {
+        setHelpFocus(typeof section === "string" ? section : null);
+        setPage("help");
+    };
 
     const applyDiscoveryResult = (result) => {
         setApiDiscovery({
@@ -176,14 +182,7 @@ function App() {
         }
     }, []);
 
-    const usesGradientBackground =
-        page === "home" ||
-        page === "login" ||
-        page === "register" ||
-        page === "credits" ||
-        page === "activate" ||
-        page === "forgot-password" ||
-        page === "reset-password";
+    const usesGradientBackground = true;
 
     const redirectToLogin = async () => {
         const pending =
@@ -274,7 +273,7 @@ function App() {
                     }
                     setPage("library");
                 }}
-                onHelpClick={() => setPage("help")}
+                onHelpClick={() => openHelp()}
                 onExitLocalMode={async () => {
                     setExitingLocalMode(true);
                     try {
@@ -295,12 +294,28 @@ function App() {
                     usesGradientBackground ? "main-content--gradient" : ""
                 }`}
             >
+                <div className="app-page-shell">
+                    <div className="app-page-glow" aria-hidden="true" />
+                    <div
+                        className={`app-page-shell__content ${
+                            page === "home"
+                                ? "app-page-shell__content--scroll"
+                                : page === "login" ||
+                                    page === "register" ||
+                                    page === "credits" ||
+                                    page === "activate" ||
+                                    page === "forgot-password" ||
+                                    page === "reset-password"
+                                  ? "app-page-shell__content--center"
+                                  : "app-page-shell__content--scroll"
+                        }`}
+                    >
                 {page === "home" && (
                     <Home
                         onGetStarted={() => setPage("register")}
                         onLocalNetworkSetup={() => setPage("local-network-setup")}
                         onGoToDashboard={() => setPage("dashboard")}
-                        onOpenHelp={() => setPage("help")}
+                        onOpenHelp={openHelp}
                         showGetStarted={!isLoggedIn}
                         showLocalWifi={isLoggedIn}
                     />
@@ -310,6 +325,7 @@ function App() {
                     <Help
                         onBack={() => setPage(isLoggedIn ? "dashboard" : "home")}
                         onOpenLocalSetup={() => setPage("local-network-setup")}
+                        focusSection={helpFocus}
                     />
                 )}
                 {page === "login" && (
@@ -392,10 +408,12 @@ function App() {
                         onRedirectToLogin={redirectToLogin}
                     />
                 )}
+                    </div>
+                </div>
             </main>
             <Footer
                 onCreditsClick={() => setPage("credits")}
-                onHelpClick={() => setPage("help")}
+                onHelpClick={() => openHelp()}
             />
         </div>
     );

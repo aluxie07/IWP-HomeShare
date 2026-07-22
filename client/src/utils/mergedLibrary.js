@@ -166,9 +166,6 @@ export async function fetchMergedLibrarySnapshot() {
 
     const slot = getActiveApiSlot();
     const result = await fetchFilesFromSlot(slot);
-    if (linkStatus.message) {
-        notes.push(linkStatus.message);
-    }
     if (result.note) {
         notes.push(result.note);
     }

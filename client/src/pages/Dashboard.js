@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import NetworkStatusIndicator from "../components/NetworkStatusIndicator";
 import {
     apiFetch,
-    formatUploadDate,
     getNetworkErrorMessage,
 } from "../utils/api";
 import {
@@ -13,9 +12,38 @@ import {
     getLibraryLinkStatus,
 } from "../utils/authStorage";
 import { getApiMode } from "../utils/apiDiscovery";
+import { resolveStorageScope } from "../utils/fileStorageScope";
 
 function isLocalApiMode(mode = getApiMode()) {
     return mode === "local" || mode === "manual";
+}
+
+function shortFileType(file) {
+    const name = file?.filename || "";
+    const dot = name.lastIndexOf(".");
+    if (dot < 0) {
+        return "FILE";
+    }
+    const ext = name.slice(dot + 1).toUpperCase();
+    return ext.slice(0, 4) || "FILE";
+}
+
+function formatRecentDate(dateString) {
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+    const now = new Date();
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startThat = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.round((startToday - startThat) / 86400000);
+    if (diffDays === 0) {
+        return "Today";
+    }
+    if (diffDays === 1) {
+        return "Yesterday";
+    }
+    return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function summarizeFiles(files) {
@@ -37,14 +65,14 @@ function summarizeFiles(files) {
 function pickNextStepTip({ isLocal, activeCount, statsReady }) {
     if (statsReady && activeCount === 0) {
         return {
-            text: "You have not uploaded any files yet. Start with Upload file.",
+            text: "You have not uploaded any files yet. Start with Upload a file.",
             action: "upload",
-            actionLabel: "Upload file",
+            actionLabel: "Upload a file",
         };
     }
     if (isLocal) {
         return {
-            text: "Keep the black HomeShare window open on this PC while you use This Wi‑Fi (minimize is OK).",
+            text: "Keep the host window open on this PC — closing it disconnects everyone on this Wi‑Fi.",
             action: null,
             actionLabel: null,
         };
@@ -74,7 +102,7 @@ function Dashboard({
 
     const apiMode = getApiMode();
     const isLocal = isLocalApiMode(apiMode);
-    const modeLabel = isLocal ? "This Wi‑Fi" : "Online";
+    const modeLabel = isLocal ? "THIS WI‑FI" : "ONLINE";
     const linkStatus = getLibraryLinkStatus();
 
     const nextTip = useMemo(
@@ -155,42 +183,67 @@ function Dashboard({
         statsReady && value != null ? String(value) : "—";
 
     const showLinkTip = Boolean(linkStatus?.message && !linkStatus.linked);
+    const tip = showLinkTip
+        ? {
+              text: linkStatus.message,
+              action:
+                  onGoToLocalSetup && linkStatus.reason === "missing_local"
+                      ? "local"
+                      : null,
+              actionLabel: "Use on this Wi‑Fi",
+          }
+        : nextTip;
 
     return (
         <section className="dashboard-page dashboard-page--home">
-            <div className="dashboard-card dashboard-card--home">
+            <div className="dash-card">
                 {loading && <p className="files-muted">Loading…</p>}
                 {error && <p className="error">{error}</p>}
                 {!loading && !error && (
                     <>
-                        <header className="dashboard-home-header">
-                            <h2 className="auth-title dashboard-home-title">
-                                Hi{user?.username ? `, ${user.username}` : ""}
-                            </h2>
-                            {user && (
-                                <p className="dashboard-account-line">
-                                    {user.email}
-                                    {user.role === "admin" ? " · Administrator" : ""}
-                                </p>
+                        <div className="dash-greet-row">
+                            <div>
+                                <h2 className="auth-title dash-auth-title">
+                                    Hi{user?.username ? `, ${user.username}` : ""}
+                                </h2>
+                                {user && (
+                                    <p className="dashboard-account-line">
+                                        {user.email}
+                                    </p>
+                                )}
+                            </div>
+                            {user?.role === "admin" && (
+                                <span className="dash-admin-pill">Admin</span>
                             )}
-                        </header>
+                        </div>
 
                         <div
-                            className={`dashboard-mode-strip ${
-                                isLocal
-                                    ? "dashboard-mode-strip--local"
-                                    : "dashboard-mode-strip--cloud"
+                            className={`dash-mode-strip ${
+                                isLocal ? "dash-mode-strip--local" : ""
                             }`}
                         >
-                            <div className="dashboard-mode-strip__main">
-                                <span className="dashboard-mode-badge">{modeLabel}</span>
-                                <p className="dashboard-mode-strip__text">
-                                    {isLocal
-                                        ? "Files stay on this PC’s HomeShare folder for people on the same Wi‑Fi."
-                                        : "Files are stored online and work from anywhere with internet."}
-                                </p>
+                            <div className="dash-mode-top">
+                                <span className="dash-mode-badge">
+                                    <span className="dash-mode-badge__dot" aria-hidden="true" />
+                                    {modeLabel}
+                                </span>
                             </div>
-                            <div className="dashboard-mode-strip__network">
+                            <p className="dash-mode-text">
+                                {isLocal ? (
+                                    <>
+                                        You&apos;re viewing the{" "}
+                                        <strong>local library</strong> on this network.
+                                        Files stay on the host PC.
+                                    </>
+                                ) : (
+                                    <>
+                                        You&apos;re viewing your{" "}
+                                        <strong>cloud library</strong>. Files here are
+                                        reachable from any device, anywhere.
+                                    </>
+                                )}
+                            </p>
+                            <div className="dash-net-status">
                                 <NetworkStatusIndicator
                                     compact
                                     initialStatus={
@@ -204,137 +257,149 @@ function Dashboard({
                                     }
                                 />
                             </div>
+
+                            {tip && (
+                                <div className="dash-tip-banner" role="status">
+                                    <span className="dash-tip-banner__ic" aria-hidden="true">
+                                        ✦
+                                    </span>
+                                    <span>
+                                        {tip.text}
+                                        {tip.action === "upload" && (
+                                            <>
+                                                {" "}
+                                                <button
+                                                    type="button"
+                                                    className="dash-tip-link"
+                                                    onClick={onGoToUpload}
+                                                >
+                                                    {tip.actionLabel}
+                                                </button>
+                                            </>
+                                        )}
+                                        {tip.action === "local" && (
+                                            <>
+                                                {" "}
+                                                <button
+                                                    type="button"
+                                                    className="dash-tip-link"
+                                                    onClick={onGoToLocalSetup}
+                                                >
+                                                    {tip.actionLabel}
+                                                </button>
+                                            </>
+                                        )}
+                                    </span>
+                                </div>
+                            )}
                         </div>
 
-                        {showLinkTip && (
-                            <div className="dashboard-tip dashboard-tip--link" role="status">
-                                <p>{linkStatus.message}</p>
-                                {onGoToLocalSetup &&
-                                    linkStatus.reason === "missing_local" && (
+                        <div className="dash-stats" aria-label="Library summary">
+                            <div className="dash-stat-cell">
+                                <p className="dash-stat-value">{formatStat(stats.activeCount)}</p>
+                                <p className="dash-stat-label">Your files</p>
+                            </div>
+                            <div className="dash-stat-cell">
+                                <p className="dash-stat-value">{formatStat(stats.sharedCount)}</p>
+                                <p className="dash-stat-label">Shared links</p>
+                            </div>
+                            <div className="dash-stat-cell">
+                                <p className="dash-stat-value">
+                                    {formatStat(stats.localOnlyCount)}
+                                </p>
+                                <p className="dash-stat-label">LAN only</p>
+                            </div>
+                        </div>
+
+                        <div className="dash-section-head">
+                            <h3>Recent files</h3>
+                            <button
+                                type="button"
+                                className="dash-open-lib-link"
+                                onClick={onGoToLibrary}
+                            >
+                                Open library →
+                            </button>
+                        </div>
+
+                        {!statsReady && (
+                            <p className="files-muted">Loading recent files…</p>
+                        )}
+                        {statsReady && stats.recent.length === 0 && (
+                            <p className="files-muted">No files yet.</p>
+                        )}
+                        {stats.recent.length > 0 && (
+                            <div className="dash-recent-list">
+                                {stats.recent.map((file) => {
+                                    const scope = resolveStorageScope(file, {
+                                        preferLocal: isLocal,
+                                    });
+                                    return (
                                         <button
+                                            key={file.id}
                                             type="button"
-                                            className="files-link-btn"
-                                            onClick={onGoToLocalSetup}
+                                            className="dash-recent-row"
+                                            onClick={onGoToLibrary}
                                         >
-                                            Use on this Wi‑Fi
+                                            <span
+                                                className={`dash-rf-icon ${
+                                                    scope === "local" ? "dash-rf-icon--local" : ""
+                                                }`}
+                                            >
+                                                {shortFileType(file)}
+                                            </span>
+                                            <span
+                                                className="dash-rf-name"
+                                                title={file.filename}
+                                            >
+                                                {file.filename}
+                                            </span>
+                                            <span className="dash-rf-date">
+                                                {formatRecentDate(file.uploadDate)}
+                                            </span>
                                         </button>
-                                    )}
+                                    );
+                                })}
                             </div>
                         )}
 
-                        {nextTip && (
-                            <div className="dashboard-tip dashboard-tip--next" role="status">
-                                <p>{nextTip.text}</p>
-                                {nextTip.action === "upload" && (
+                        <div className="dash-actions">
+                            <button
+                                type="button"
+                                className="dash-btn-upload"
+                                onClick={onGoToUpload}
+                            >
+                                Upload a file
+                            </button>
+                            <div className="dash-action-pair">
+                                <button
+                                    type="button"
+                                    className="dash-btn-secondary"
+                                    onClick={onGoToLibrary}
+                                >
+                                    Library
+                                </button>
+                                {onGoToLocalSetup && (
                                     <button
                                         type="button"
-                                        className="files-link-btn"
-                                        onClick={onGoToUpload}
+                                        className="dash-btn-secondary"
+                                        onClick={onGoToLocalSetup}
                                     >
-                                        {nextTip.actionLabel}
+                                        Use on this Wi‑Fi
                                     </button>
                                 )}
                             </div>
-                        )}
-
-                        <div className="dashboard-stats" aria-label="Library summary">
-                            <div className="dashboard-stat">
-                                <span className="dashboard-stat__value">
-                                    {formatStat(stats.activeCount)}
-                                </span>
-                                <span className="dashboard-stat__label">Your files</span>
-                            </div>
-                            <div className="dashboard-stat">
-                                <span className="dashboard-stat__value">
-                                    {formatStat(stats.sharedCount)}
-                                </span>
-                                <span className="dashboard-stat__label">Shared links</span>
-                            </div>
-                            <div className="dashboard-stat">
-                                <span className="dashboard-stat__value">
-                                    {formatStat(stats.localOnlyCount)}
-                                </span>
-                                <span className="dashboard-stat__label">LAN only</span>
-                            </div>
-                        </div>
-
-                        <div className="dashboard-recent">
-                            <div className="dashboard-recent__header">
-                                <h3 className="dashboard-section-title">Recent files</h3>
-                                <button
-                                    type="button"
-                                    className="files-link-btn"
-                                    onClick={onGoToLibrary}
-                                >
-                                    Open library
-                                </button>
-                            </div>
-                            {!statsReady && (
-                                <p className="files-muted">Loading recent files…</p>
-                            )}
-                            {statsReady && stats.recent.length === 0 && (
-                                <p className="files-muted">No files yet.</p>
-                            )}
-                            {stats.recent.length > 0 && (
-                                <ul className="dashboard-recent__list">
-                                    {stats.recent.map((file) => (
-                                        <li key={file.id}>
-                                            <button
-                                                type="button"
-                                                className="dashboard-recent__item"
-                                                onClick={onGoToLibrary}
-                                            >
-                                                <span
-                                                    className="dashboard-recent__name"
-                                                    title={file.filename}
-                                                >
-                                                    {file.filename}
-                                                </span>
-                                                <span className="dashboard-recent__meta">
-                                                    {formatUploadDate(file.uploadDate)}
-                                                </span>
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-
-                        <div className="dashboard-action-tiles">
-                            <button
-                                type="button"
-                                className="dashboard-action-tile dashboard-action-tile--primary"
-                                onClick={onGoToUpload}
-                            >
-                                Upload file
-                            </button>
-                            <button
-                                type="button"
-                                className="dashboard-action-tile"
-                                onClick={onGoToLibrary}
-                            >
-                                File library
-                            </button>
-                            {onGoToLocalSetup && (
-                                <button
-                                    type="button"
-                                    className="dashboard-action-tile"
-                                    onClick={onGoToLocalSetup}
-                                >
-                                    Use on this Wi‑Fi
-                                </button>
-                            )}
                         </div>
                     </>
                 )}
 
-                <div className="dashboard-actions dashboard-actions--secondary">
-                    <button type="button" className="logout-btn" onClick={handleLogout}>
-                        Logout
+                <div className="dash-footer-strip">
+                    <button type="button" className="dash-footer-link" onClick={handleLogout}>
+                        Log out
                     </button>
                     <button
                         type="button"
-                        className="delete-account-link-btn"
+                        className="dash-footer-link dash-footer-link--danger"
                         onClick={onDeleteAccount}
                     >
                         Delete account
