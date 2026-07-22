@@ -1,12 +1,12 @@
 .gradient-bg {
-  --color-bg1: rgb(108, 0, 162);
-  --color-bg2: rgb(0, 17, 82);
-  --color1: 18, 113, 255;
-  --color2: 221, 74, 255;
-  --color3: 100, 220, 255;
-  --color4: 200, 50, 50;
-  --color5: 180, 180, 50;
-  --color-interactive: 140, 100, 255;
+  --color-bg1: rgb(64, 61, 136);
+  --color-bg2: rgb(47, 45, 102);
+  --color1: 248, 178, 178;
+  --color2: 175, 113, 157;
+  --color3: 139, 99, 155;
+  --color4: 64, 61, 136;
+  --color5: 175, 113, 157;
+  --color-interactive: 248, 178, 178;
   --circle-size: 80%;
   --blending: hard-light;
 

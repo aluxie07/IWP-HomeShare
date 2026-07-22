@@ -16,10 +16,13 @@ function getExplorerFilesDir() {
 
 function findLogoSource() {
     const candidates = [
+        path.join(__dirname, "..", "assets", "home.png"),
+        path.join(__dirname, "..", "..", "client", "public", "home.png"),
+        path.join(process.cwd(), "assets", "home.png"),
+        path.join(process.cwd(), "home.png"),
+        // Fallbacks if home.png is missing from an older package
         path.join(__dirname, "..", "assets", "HomeShareLogo.png"),
         path.join(__dirname, "..", "..", "client", "public", "HomeShareLogo.png"),
-        path.join(process.cwd(), "assets", "HomeShareLogo.png"),
-        path.join(process.cwd(), "HomeShareLogo.png"),
     ];
 
     return candidates.find((p) => fs.existsSync(p)) || null;
@@ -183,17 +186,20 @@ function setupExplorerFolder() {
     fs.mkdirSync(assetsDir, { recursive: true });
 
     const logoSource = findLogoSource();
-    let iconPath = path.join(assetsDir, "HomeShare.ico");
+    let iconPath = path.join(assetsDir, "Home.ico");
 
     if (logoSource) {
-        const pngDest = path.join(assetsDir, "HomeShareLogo.png");
+        const pngDest = path.join(assetsDir, "home.png");
         try {
             fs.copyFileSync(logoSource, pngDest);
         } catch {
             // ignore
         }
 
-        if (!fs.existsSync(iconPath) || fs.statSync(logoSource).mtimeMs > fs.statSync(iconPath).mtimeMs) {
+        if (
+            !fs.existsSync(iconPath) ||
+            fs.statSync(logoSource).mtimeMs > fs.statSync(iconPath).mtimeMs
+        ) {
             const ok = convertPngToIco(pngDest, iconPath);
             if (!ok) {
                 iconPath = pngDest;
