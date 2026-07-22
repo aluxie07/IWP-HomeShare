@@ -124,7 +124,7 @@ function Dashboard({
                             className="auth-form__secondary-btn"
                             onClick={onGoToLocalSetup}
                         >
-                            Local Network setup
+                            Use on this Wi‑Fi
                         </button>
                     )}
                 </div>

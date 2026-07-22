@@ -10,31 +10,55 @@ function Help({ onBack, onOpenLocalSetup }) {
                 </div>
 
                 <p className="files-page-intro">
-                    HomeShare lets you share files with people on the same Wi‑Fi or through the
-                    cloud site. This page explains the core features.
+                    HomeShare is for homes and classrooms. You can work{" "}
+                    <strong>Online (Cloud)</strong> from anywhere, or keep files on a PC on{" "}
+                    <strong>this Wi‑Fi (Local)</strong>.
                 </p>
 
                 <div className="help-section">
-                    <h3 className="files-section-title">Cloud mode</h3>
-                    <p className="files-muted">
-                        Cloud mode allows you to upload files online.. You can log in, upload, and manage files from anywhere with internet. File contents are stored in the cloud. Use this when you are not running a local server.
-                        File contents are stored in the cloud.
-                    </p>
+                    <h3 className="files-section-title">Online (Cloud) vs This Wi‑Fi (Local)</h3>
+                    <ul className="help-list">
+                        <li>
+                            <strong>Online (Cloud)</strong> — log in from anywhere with internet.
+                            Files are stored on HomeShare’s cloud service.
+                        </li>
+                        <li>
+                            <strong>This Wi‑Fi (Local)</strong> — files stay on a host PC in your
+                            house or classroom. Everyone uses this website after a one-time setup
+                            on that PC.
+                        </li>
+                    </ul>
                 </div>
 
                 <div className="help-section">
-                    <h3 className="files-section-title">Local Network Mode</h3>
+                    <h3 className="files-section-title">Use on this Wi‑Fi (for teachers &amp; families)</h3>
                     <p className="files-muted">
-                        The website connects to a HomeShare server on a PC on your Wi‑Fi. To set up a free server, follow the steps below. Uploads
-                        on that server are kept on the host PC’s HomeShare folder. Other
-                        devices on the same Wi‑Fi can connect with the host’s LAN address (for
-                        example <code>http://192.168.x.x:8080</code>).
+                        Pick one Windows PC as the host (the teacher’s computer or a home PC).
+                        Students and family members stay on the same Wi‑Fi and use this website —
+                        they do not need to install anything.
                     </p>
                     <ol className="local-setup-join-steps">
-                        <li>Create a MongoDB account and create a new cluster for free. Click connect, then drivers and copy the connection string, replacing dbpassword with your cluster password. </li>
-                        <li>Download and run the local package as an administrator on the host PC. Follow the setup instructions and wait until you see "MongoDB connected". </li>
-                        <li>On that PC, open Local Network Mode on the HomeShare website and click Detect</li>
-                        <li>Copy the LAN address for phones or other PCs</li>
+                        <li>
+                            <strong>Get a free database link</strong> — create a free MongoDB Atlas
+                            account, create a free cluster, copy the connection link, and put your
+                            real password in the link.
+                        </li>
+                        <li>
+                            <strong>Download and start on this PC</strong> — download the Windows
+                            zip, unzip, double‑click <strong>Start HomeShare.bat</strong>, paste
+                            the database link in the popup, and leave the black window open
+                            (minimize is fine).
+                        </li>
+                        <li>
+                            <strong>Connect this website</strong> — on that same PC, open{" "}
+                            <strong>Use on this Wi‑Fi</strong> and wait for Connected (or tap Try
+                            again). Then create an account or log in.
+                        </li>
+                        <li>
+                            <strong>Other devices (optional)</strong> — on a phone or another PC,
+                            paste the host’s Wi‑Fi address from step 4 of the setup page. “Try
+                            again” only works on the host PC.
+                        </li>
                     </ol>
                     {onOpenLocalSetup && (
                         <button
@@ -42,26 +66,26 @@ function Help({ onBack, onOpenLocalSetup }) {
                             className="auth-form__secondary-btn"
                             onClick={onOpenLocalSetup}
                         >
-                            Open Local Mode setup
+                            Open “Use on this Wi‑Fi” setup
                         </button>
                     )}
                 </div>
 
                 <div className="help-section">
                     <h3 className="files-section-title">Cloud vs Local file badges</h3>
-                    <p className="files-muted">
-                        In the library, each file shows a badge:
-                    </p>
+                    <p className="files-muted">In the library, each file shows a badge:</p>
                     <ul className="help-list">
                         <li>
                             <strong>Cloud</strong> — stored on the online service
                         </li>
                         <li>
-                            <strong>Local</strong> — stored on the host PC’s disk
+                            <strong>Local</strong> — stored on the host PC
                         </li>
                     </ul>
                     <p className="files-muted">
-                        Use the All / Cloud / Local filters to show one group at a time.
+                        Use the All / Cloud / Local filters to show one group at a time. If you
+                        log in to both Online and This Wi‑Fi with the <strong>same email</strong>,
+                        the library can show both.
                     </p>
                 </div>
 
@@ -75,8 +99,8 @@ function Help({ onBack, onOpenLocalSetup }) {
                             <strong>Shared</strong> — you can create a share link for others
                         </li>
                         <li>
-                            <strong>Local Only</strong> — remembers the uploader’s Wi‑Fi / LAN
-                            IP range; only people on that same range can download
+                            <strong>Local Only</strong> — only people on the same Wi‑Fi / network
+                            range as when you set this can download
                         </li>
                     </ul>
                     <p className="files-muted">
@@ -87,12 +111,13 @@ function Help({ onBack, onOpenLocalSetup }) {
                 <div className="help-section">
                     <h3 className="files-section-title">Sharing &amp; library</h3>
                     <ul className="help-list">
-                        <li>Upload files from Upload; open them in the Library</li>
+                        <li>Upload from Upload; open files in the Library</li>
                         <li>Click a file for access mode, share link, download, or delete</li>
-                        <li>Deleted files keep a short history entry (who uploaded / deleted)</li>
+                        <li>Deleted files keep a short history entry</li>
                         <li>
-                            On Windows, other PCs may open the shared folder{" "}
-                            <code>\\HOST-IP\HomeShare</code> (may ask for Windows sign-in), recommended for users other than the host to use the website's file library instead.
+                            Prefer the website library on phones and student devices. A Windows
+                            shared folder is optional and only needed for advanced File Explorer
+                            use.
                         </li>
                     </ul>
                 </div>

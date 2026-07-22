@@ -1,7 +1,7 @@
 import GradientPageLayout from "../components/GradientPageLayout";
 
 const HOME_DESCRIPTION =
-    "HomeShare is a lightweight local-network file sharing platform designed to provide secure and private file access within trusted environments such as homes, classrooms, and small offices. Unlike traditional cloud storage systems, HomeShare focuses on local hosting and network-aware security, allowing users connected to the same Wi-Fi network to upload, access, and manage shared files without relying on large external cloud services.";
+    "HomeShare helps families and classrooms share files on the same Wi‑Fi, with an optional online mode when you’re away. Keep files on a PC at home or school, or use the cloud when you need access from anywhere.";
 
 function Home({ onGetStarted, onLocalNetworkSetup, showGetStarted }) {
     return (
@@ -26,13 +26,19 @@ function Home({ onGetStarted, onLocalNetworkSetup, showGetStarted }) {
                                 </span>
                             </button>
                         )}
-                        <button
-                            type="button"
-                            className="home-local-mode-btn"
-                            onClick={onLocalNetworkSetup}
-                        >
-                            Local Network Mode (download)
-                        </button>
+                        <div className="home-local-mode-wrap">
+                            <button
+                                type="button"
+                                className="home-local-mode-btn"
+                                onClick={onLocalNetworkSetup}
+                            >
+                                Use on this Wi‑Fi
+                            </button>
+                            <p className="home-local-mode-hint">
+                                Set up once on a home or classroom PC, then everyone on the same
+                                Wi‑Fi can use this website.
+                            </p>
+                        </div>
                     </div>
                 </div>
                 <div className="home-hero-right">

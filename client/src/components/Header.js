@@ -50,12 +50,12 @@ function Header({
     const isLocalMode =
         apiConnected && (apiMode === "local" || apiMode === "manual");
     const modeLabel = isLocalMode
-        ? "Local"
+        ? "This Wi‑Fi"
         : apiMode === "cloud"
-          ? "Cloud"
+          ? "Online"
           : apiMode === "detecting"
             ? "…"
-            : "Cloud";
+            : "Online";
 
     return (
         <header className={`site-header ${menuOpen ? "site-header--menu-open" : ""}`}>
@@ -74,7 +74,7 @@ function Header({
                                 ? "header-mode-badge--local"
                                 : "header-mode-badge--cloud"
                         }`}
-                        title={isLocalMode ? "Local Network Mode" : "Cloud mode"}
+                        title={isLocalMode ? "This Wi‑Fi (Local)" : "Online (Cloud)"}
                     >
                         {modeLabel}
                     </span>
@@ -84,9 +84,9 @@ function Header({
                             className="header-mode-exit"
                             onClick={onExitLocalMode}
                             disabled={exitingLocalMode}
-                            title="Switch back to cloud API"
+                            title="Switch back to Online (Cloud)"
                         >
-                            {exitingLocalMode ? "…" : "Exit local"}
+                            {exitingLocalMode ? "…" : "Use online"}
                         </button>
                     )}
                 </div>

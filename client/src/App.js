@@ -358,6 +358,9 @@ function App() {
                                 connected: result.connected,
                             })
                         }
+                        onGoToLogin={() => setPage("login")}
+                        onGoToRegister={() => setPage("register")}
+                        onGoToLibrary={() => setPage("library")}
                     />
                 )}
                 {page === "delete-account" && (

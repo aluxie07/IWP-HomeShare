@@ -78,8 +78,8 @@ Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "HomeShare Local Server Setup"
-$form.Size = New-Object System.Drawing.Size(560, 280)
+$form.Text = "HomeShare — first-time setup on this PC"
+$form.Size = New-Object System.Drawing.Size(560, 320)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox = $false
@@ -87,44 +87,44 @@ $form.MinimizeBox = $false
 $form.TopMost = $true
 
 $labelTitle = New-Object System.Windows.Forms.Label
-$labelTitle.Text = "Set up your local HomeShare server"
+$labelTitle.Text = "HomeShare — first-time setup on this PC"
 $labelTitle.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
 $labelTitle.Location = New-Object System.Drawing.Point(16, 14)
 $labelTitle.AutoSize = $true
 $form.Controls.Add($labelTitle)
 
 $labelMongo = New-Object System.Windows.Forms.Label
-$labelMongo.Text = "MongoDB connection URI (required)"
-$labelMongo.Location = New-Object System.Drawing.Point(16, 52)
+$labelMongo.Text = "Paste your database link here (required)"
+$labelMongo.Location = New-Object System.Drawing.Point(16, 48)
 $labelMongo.AutoSize = $true
 $form.Controls.Add($labelMongo)
 
 $textMongo = New-Object System.Windows.Forms.TextBox
-$textMongo.Location = New-Object System.Drawing.Point(16, 74)
+$textMongo.Location = New-Object System.Drawing.Point(16, 70)
 $textMongo.Size = New-Object System.Drawing.Size(510, 24)
 $textMongo.Text = "mongodb+srv://USER:PASSWORD@cluster.mongodb.net/homeshare"
 $form.Controls.Add($textMongo)
 
 $labelAdmin = New-Object System.Windows.Forms.Label
-$labelAdmin.Text = "Admin email (optional)"
-$labelAdmin.Location = New-Object System.Drawing.Point(16, 114)
+$labelAdmin.Text = "Your email (optional — makes you an admin)"
+$labelAdmin.Location = New-Object System.Drawing.Point(16, 108)
 $labelAdmin.AutoSize = $true
 $form.Controls.Add($labelAdmin)
 
 $textAdmin = New-Object System.Windows.Forms.TextBox
-$textAdmin.Location = New-Object System.Drawing.Point(16, 136)
+$textAdmin.Location = New-Object System.Drawing.Point(16, 130)
 $textAdmin.Size = New-Object System.Drawing.Size(510, 24)
 $form.Controls.Add($textAdmin)
 
 $labelHint = New-Object System.Windows.Forms.Label
-$labelHint.Text = "Get a free URI from MongoDB Atlas. Then open the website and click Detect local server."
-$labelHint.Location = New-Object System.Drawing.Point(16, 172)
-$labelHint.Size = New-Object System.Drawing.Size(510, 32)
+$labelHint.Text = "1) Create a free MongoDB Atlas account  2) Create a free cluster  3) Connect → copy the link  4) Put your real password in the link. Then leave this black window open and connect on the website."
+$labelHint.Location = New-Object System.Drawing.Point(16, 164)
+$labelHint.Size = New-Object System.Drawing.Size(510, 72)
 $form.Controls.Add($labelHint)
 
 $btnOk = New-Object System.Windows.Forms.Button
 $btnOk.Text = "Save and start"
-$btnOk.Location = New-Object System.Drawing.Point(300, 210)
+$btnOk.Location = New-Object System.Drawing.Point(300, 248)
 $btnOk.Size = New-Object System.Drawing.Size(110, 28)
 $btnOk.DialogResult = [System.Windows.Forms.DialogResult]::OK
 $form.AcceptButton = $btnOk
@@ -132,7 +132,7 @@ $form.Controls.Add($btnOk)
 
 $btnCancel = New-Object System.Windows.Forms.Button
 $btnCancel.Text = "Cancel"
-$btnCancel.Location = New-Object System.Drawing.Point(416, 210)
+$btnCancel.Location = New-Object System.Drawing.Point(416, 248)
 $btnCancel.Size = New-Object System.Drawing.Size(110, 28)
 $btnCancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
 $form.CancelButton = $btnCancel
@@ -146,7 +146,7 @@ if ($result -ne [System.Windows.Forms.DialogResult]::OK) {
 $mongo = $textMongo.Text.Trim()
 $admin = $textAdmin.Text.Trim()
 if (-not $mongo -or $mongo -match "USER:PASSWORD") {
-  [System.Windows.Forms.MessageBox]::Show("Enter a real MongoDB URI (not the placeholder).","HomeShare") | Out-Null
+  [System.Windows.Forms.MessageBox]::Show("Paste your real database link (not the placeholder text).","HomeShare") | Out-Null
   exit 3
 }
 
@@ -220,19 +220,21 @@ function ask(question) {
 
 async function runConsoleWizard() {
     console.log("");
-    console.log("  HomeShare Local Server — first-time setup");
-    console.log("  =========================================");
+    console.log("  HomeShare — first-time setup on this PC");
+    console.log("  =======================================");
+    console.log("  1) Free MongoDB Atlas account  2) Free cluster");
+    console.log("  3) Connect → copy the link  4) Put your real password in the link");
     console.log("");
 
     let mongoUri = "";
     while (!mongoUri || mongoUri.includes("USER:PASSWORD")) {
-        mongoUri = await ask("  MongoDB URI: ");
+        mongoUri = await ask("  Paste your database link: ");
         if (!mongoUri || mongoUri.includes("USER:PASSWORD")) {
-            console.log("  Please paste your real mongodb+srv://... connection string.");
+            console.log("  Please paste the real link (not the USER:PASSWORD example).");
         }
     }
 
-    const adminEmail = await ask("  Admin email (optional, Enter to skip): ");
+    const adminEmail = await ask("  Your email (optional, Enter to skip): ");
     return { mongoUri, adminEmail };
 }
 
