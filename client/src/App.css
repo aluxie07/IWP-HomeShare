@@ -1966,6 +1966,8 @@
   border: 1px solid #e4e9ef;
   border-radius: 12px;
   background: #fff;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .local-setup-check-step--complete {
@@ -2016,7 +2018,18 @@
 
 .local-setup-external-link {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  max-width: 100%;
+  box-sizing: border-box;
   text-decoration: none;
+}
+
+.local-setup-check-step .auth-form__secondary-btn {
+  width: auto;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .local-setup-connect-actions {
@@ -2174,6 +2187,24 @@
 
 .local-setup-lan-copy-btn {
   flex-shrink: 0;
+  width: auto;
+}
+
+.local-setup-lan-alternates {
+  margin-top: 0.85rem;
+  font-family: "Jost", sans-serif;
+  font-size: 0.9rem;
+  color: #475467;
+}
+
+.local-setup-lan-alternates summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #344054;
+}
+
+.local-setup-lan-alternates .local-setup-lan-url-list {
+  margin-top: 0.65rem;
 }
 
 .local-setup-copy-note {

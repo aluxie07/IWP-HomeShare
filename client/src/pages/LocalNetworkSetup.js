@@ -286,6 +286,8 @@ function LocalNetworkSetup({
         shareInfo?.apiUrls?.length > 0
             ? shareInfo.apiUrls
             : shareInfo?.lanIps?.map((ip) => `http://${ip}:8080`) || [];
+    const preferredLanUrl = lanApiUrls[0] || "";
+    const alternateLanUrls = lanApiUrls.slice(1);
 
     const loggedIn = isLoggedIn();
 
@@ -528,31 +530,62 @@ function LocalNetworkSetup({
                                         <h4 className="local-setup-subhead">
                                             Address for other devices
                                         </h4>
+                                        <p className="files-muted">
+                                            Copy this Wi‑Fi address and paste it on phones or
+                                            other computers (same Wi‑Fi).
+                                        </p>
                                         {shareInfoLoading && (
                                             <p className="files-muted">Loading address…</p>
                                         )}
-                                        {!shareInfoLoading && lanApiUrls.length > 0 && (
-                                            <ul className="local-setup-lan-url-list">
-                                                {lanApiUrls.map((url) => (
-                                                    <li
-                                                        key={url}
-                                                        className="local-setup-lan-url-row"
-                                                    >
-                                                        <code className="local-setup-lan-url-text">
-                                                            {url}
-                                                        </code>
-                                                        <button
-                                                            type="button"
-                                                            className="auth-form__secondary-btn local-setup-lan-copy-btn"
-                                                            onClick={() => copyText(url)}
-                                                        >
-                                                            Copy
-                                                        </button>
-                                                    </li>
-                                                ))}
-                                            </ul>
+                                        {!shareInfoLoading && preferredLanUrl && (
+                                            <div className="local-setup-lan-url-row">
+                                                <code className="local-setup-lan-url-text">
+                                                    {preferredLanUrl}
+                                                </code>
+                                                <button
+                                                    type="button"
+                                                    className="auth-form__secondary-btn local-setup-lan-copy-btn"
+                                                    onClick={() => copyText(preferredLanUrl)}
+                                                >
+                                                    Copy
+                                                </button>
+                                            </div>
                                         )}
-                                        {!shareInfoLoading && lanApiUrls.length === 0 && (
+                                        {!shareInfoLoading &&
+                                            preferredLanUrl &&
+                                            alternateLanUrls.length > 0 && (
+                                                <details className="local-setup-lan-alternates">
+                                                    <summary>
+                                                        Other addresses on this PC (
+                                                        {alternateLanUrls.length})
+                                                    </summary>
+                                                    <p className="files-muted">
+                                                        Only use these if the address above does
+                                                        not work (for example a second network
+                                                        adapter).
+                                                    </p>
+                                                    <ul className="local-setup-lan-url-list">
+                                                        {alternateLanUrls.map((url) => (
+                                                            <li
+                                                                key={url}
+                                                                className="local-setup-lan-url-row"
+                                                            >
+                                                                <code className="local-setup-lan-url-text">
+                                                                    {url}
+                                                                </code>
+                                                                <button
+                                                                    type="button"
+                                                                    className="auth-form__secondary-btn local-setup-lan-copy-btn"
+                                                                    onClick={() => copyText(url)}
+                                                                >
+                                                                    Copy
+                                                                </button>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </details>
+                                            )}
+                                        {!shareInfoLoading && !preferredLanUrl && (
                                             <p className="files-muted">
                                                 Connect on the host PC first so we can show the
                                                 Wi‑Fi address to copy.
