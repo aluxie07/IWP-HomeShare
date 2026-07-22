@@ -52,7 +52,7 @@ function Home({
                         <p className="home-split__desc">
                             Use HomeShare from anywhere with internet. Files live in the cloud.
                         </p>
-                        <span className="home-split__cta home-split__cta--on-rose">→ Help</span>
+                        <span className="home-split__cta home-split__cta--on-rose">Learn more</span>
                     </div>
                 </button>
 
@@ -75,7 +75,7 @@ function Home({
                             Keep files on a host PC at home or school. Everyone else just uses this
                             site.
                         </p>
-                        <span className="home-split__cta">→ Help</span>
+                        <span className="home-split__cta">Learn more</span>
                     </div>
                 </button>
             </section>

@@ -368,7 +368,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                     <div className="lib-header-actions">
                         <button
                             type="button"
-                            className="lib-btn-ghost"
+                            className="file-download-btn"
                             onClick={handleRefresh}
                             disabled={refreshing || loading}
                         >
@@ -376,7 +376,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                         </button>
                         <button
                             type="button"
-                            className="lib-btn-upload-sm"
+                            className="logout-btn files-upload-nav-btn"
                             onClick={onGoToUpload}
                         >
                             Upload
@@ -395,13 +395,15 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                 {!error && syncNote && <p className="files-muted">{syncNote}</p>}
 
                 {!loading && !error && activeFiles.length > 0 && (
-                    <div className="lib-filters" role="group" aria-label="Filter by storage">
+                    <div className="file-library-filters" role="group" aria-label="Filter by storage">
                         {STORAGE_FILTERS.map((option) => (
                             <button
                                 key={option.value}
                                 type="button"
-                                className={`lib-pill ${
-                                    storageFilter === option.value ? "lib-pill--active" : ""
+                                className={`file-library-filter-btn ${
+                                    storageFilter === option.value
+                                        ? "file-library-filter-btn--active"
+                                        : ""
                                 }`}
                                 aria-pressed={storageFilter === option.value}
                                 onClick={() => setStorageFilter(option.value)}
@@ -503,7 +505,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                         </p>
                         <button
                             type="button"
-                            className="lib-btn-upload-sm"
+                            className="logout-btn"
                             onClick={onGoToUpload}
                         >
                             Upload a file
@@ -683,10 +685,10 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                     </p>
                                 )}
 
-                                <div className="lib-modal-actions">
+                                <div className="file-list-actions file-detail-actions">
                                     <button
                                         type="button"
-                                        className="lib-m-btn lib-m-btn--primary"
+                                        className="file-share-btn"
                                         onClick={() => setShareFile(selectedFile)}
                                         disabled={!canShareFile(selectedFile)}
                                         title={
@@ -699,14 +701,14 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                     </button>
                                     <button
                                         type="button"
-                                        className="lib-m-btn"
+                                        className="file-download-btn"
                                         onClick={() => handleDownload(selectedFile)}
                                     >
                                         Download
                                     </button>
                                     <button
                                         type="button"
-                                        className="lib-m-btn lib-m-btn--danger"
+                                        className="share-revoke-btn"
                                         onClick={() => handleDelete(selectedFile)}
                                         disabled={deletingId === selectedFile.id}
                                     >

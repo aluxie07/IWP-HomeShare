@@ -363,43 +363,41 @@ function Dashboard({
                             </div>
                         )}
 
-                        <div className="dash-actions">
+                        <div className="dash-actions dashboard-action-tiles">
                             <button
                                 type="button"
-                                className="dash-btn-upload"
+                                className="dashboard-action-tile dashboard-action-tile--primary"
                                 onClick={onGoToUpload}
                             >
                                 Upload a file
                             </button>
-                            <div className="dash-action-pair">
+                            <button
+                                type="button"
+                                className="dashboard-action-tile"
+                                onClick={onGoToLibrary}
+                            >
+                                Library
+                            </button>
+                            {onGoToLocalSetup && (
                                 <button
                                     type="button"
-                                    className="dash-btn-secondary"
-                                    onClick={onGoToLibrary}
+                                    className="dashboard-action-tile"
+                                    onClick={onGoToLocalSetup}
                                 >
-                                    Library
+                                    Use on this Wi‑Fi
                                 </button>
-                                {onGoToLocalSetup && (
-                                    <button
-                                        type="button"
-                                        className="dash-btn-secondary"
-                                        onClick={onGoToLocalSetup}
-                                    >
-                                        Use on this Wi‑Fi
-                                    </button>
-                                )}
-                            </div>
+                            )}
                         </div>
                     </>
                 )}
 
-                <div className="dash-footer-strip">
-                    <button type="button" className="dash-footer-link" onClick={handleLogout}>
-                        Log out
+                <div className="dashboard-actions dashboard-actions--secondary">
+                    <button type="button" className="logout-btn" onClick={handleLogout}>
+                        Logout
                     </button>
                     <button
                         type="button"
-                        className="dash-footer-link dash-footer-link--danger"
+                        className="delete-account-link-btn"
                         onClick={onDeleteAccount}
                     >
                         Delete account
