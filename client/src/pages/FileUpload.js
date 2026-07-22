@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import NetworkStatusIndicator from "../components/NetworkStatusIndicator";
 import { apiFetch, formatFileSize, formatUploadDate } from "../utils/api";
 import { ACCESS_MODES, getAccessModeLabel } from "../utils/accessModes";
@@ -38,16 +38,13 @@ async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLo
             const end = Math.min(start + chunkSize, file.size);
             const blob = file.slice(start, end);
 
-            const chunkRes = await apiFetch(
-                `/files/upload/${uploadId}/chunks/${index}`,
-                {
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/octet-stream",
-                    },
-                    body: blob,
-                }
-            );
+            const chunkRes = await apiFetch(`/files/upload/${uploadId}/chunks/${index}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/octet-stream",
+                },
+                body: blob,
+            });
 
             if (chunkRes.status === 401) {
                 onRedirectToLogin();
@@ -88,6 +85,7 @@ async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLo
 }
 
 function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
+    const [modalOpen, setModalOpen] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
     const [status, setStatus] = useState("");
     const [isError, setIsError] = useState(false);
@@ -96,6 +94,8 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
     const [files, setFiles] = useState([]);
     const [loadingList, setLoadingList] = useState(true);
     const [accessMode, setAccessMode] = useState("private");
+    const [dragging, setDragging] = useState(false);
+    const fileInputRef = useRef(null);
 
     const loadFiles = useCallback(async () => {
         setLoadingList(true);
@@ -124,16 +124,71 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
         loadFiles();
     }, [loadFiles]);
 
-    const handleFileChange = (e) => {
-        const file = e.target.files?.[0] || null;
+    useEffect(() => {
+        if (!modalOpen) return undefined;
+
+        const onKeyDown = (event) => {
+            if (event.key === "Escape" && !uploading) {
+                setModalOpen(false);
+            }
+        };
+
+        document.addEventListener("keydown", onKeyDown);
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+
+        return () => {
+            document.removeEventListener("keydown", onKeyDown);
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [modalOpen, uploading]);
+
+    const assignFile = (file) => {
+        if (!file) return;
         setSelectedFile(file);
         setStatus("");
         setIsError(false);
         setProgress(0);
     };
 
-    const handleUpload = async (e) => {
+    const handleFileChange = (e) => {
+        assignFile(e.target.files?.[0] || null);
+    };
+
+    const openModal = () => {
+        setModalOpen(true);
+        setStatus("");
+        setIsError(false);
+        setProgress(0);
+    };
+
+    const closeModal = () => {
+        if (uploading) return;
+        setModalOpen(false);
+        setDragging(false);
+    };
+
+    const handleDragOver = (e) => {
         e.preventDefault();
+        e.stopPropagation();
+        setDragging(true);
+    };
+
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragging(false);
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragging(false);
+        const file = e.dataTransfer.files?.[0] || null;
+        assignFile(file);
+    };
+
+    const handleUpload = async () => {
         setStatus("");
         setIsError(false);
         setProgress(0);
@@ -164,8 +219,9 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
             setIsError(false);
             setSelectedFile(null);
             setProgress(100);
-            const input = document.getElementById("file-upload-input");
-            if (input) input.value = "";
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+            }
             loadFiles();
         } catch (err) {
             if (err.message === "UNAUTHORIZED") {
@@ -183,66 +239,25 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
             <div className="dashboard-card files-page-card">
                 <h2 className="auth-title">Upload file</h2>
                 <p className="files-page-intro">
-                    Choose a file from your computer (up to 5 GB). Large files are sent in
-                    chunks so uploads stay reliable.
+                    Upload a file from your computer (up to 5 GB). Large files are sent in chunks so
+                    uploads stay reliable.
                 </p>
 
                 <NetworkStatusIndicator compact />
 
-                <form className="file-upload-form" onSubmit={handleUpload}>
-                    <label className="file-upload-label" htmlFor="file-upload-input">
-                        Select file
-                    </label>
-                    <input
-                        id="file-upload-input"
-                        type="file"
-                        className="file-upload-input"
-                        onChange={handleFileChange}
-                    />
-                    {selectedFile && (
-                        <p className="file-upload-selected">
-                            Selected: <strong>{selectedFile.name}</strong> (
-                            {formatFileSize(selectedFile.size)})
-                        </p>
-                    )}
-                    <label className="share-modal-label file-access-mode-label">
-                        Access mode
-                        <select
-                            className="file-access-mode-select"
-                            value={accessMode}
-                            onChange={(e) => setAccessMode(e.target.value)}
-                        >
-                            {ACCESS_MODES.map((mode) => (
-                                <option key={mode.value} value={mode.value}>
-                                    {mode.label}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                    <p className="file-access-mode-hint">
-                        {ACCESS_MODES.find((m) => m.value === accessMode)?.description}
-                    </p>
-                    <button
-                        type="submit"
-                        className="logout-btn file-upload-submit"
-                        disabled={uploading || !selectedFile}
-                    >
-                        {uploading ? `Uploading… ${progress}%` : "Upload"}
-                    </button>
-                    {uploading && (
-                        <div className="file-upload-progress" aria-valuenow={progress}>
-                            <div
-                                className="file-upload-progress__bar"
-                                style={{ width: `${progress}%` }}
-                            />
-                        </div>
-                    )}
+                <button
+                    type="button"
+                    className="file-upload-open-btn"
+                    onClick={openModal}
+                >
+                    Upload a file
+                </button>
+
+                {status && !modalOpen && (
                     <div className="message-area">
-                        {status && (
-                            <p className={isError ? "error" : "success"}>{status}</p>
-                        )}
+                        <p className={isError ? "error" : "success"}>{status}</p>
                     </div>
-                </form>
+                )}
 
                 <div className="files-section">
                     <div className="files-section-header">
@@ -261,23 +276,147 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
                                 .filter((f) => !f.deleted)
                                 .slice(0, 5)
                                 .map((file) => (
-                                <li key={file.id} className="file-list-item">
-                                    <span className="file-list-name">{file.filename}</span>
-                                    <span className="file-list-meta">
-                                        {getStorageScopeLabel(file.storageScope)} ·{" "}
-                                        {getAccessModeLabel(file.accessMode)} ·{" "}
-                                        {formatFileSize(file.fileSize)} ·{" "}
-                                        {formatUploadDate(file.uploadDate)}
-                                        {file.uploadedBy
-                                            ? ` · by ${file.uploadedBy}`
-                                            : ""}
-                                    </span>
-                                </li>
-                            ))}
+                                    <li key={file.id} className="file-list-item">
+                                        <span className="file-list-name">{file.filename}</span>
+                                        <span className="file-list-meta">
+                                            {getStorageScopeLabel(file.storageScope)} ·{" "}
+                                            {getAccessModeLabel(file.accessMode)} ·{" "}
+                                            {formatFileSize(file.fileSize)} ·{" "}
+                                            {formatUploadDate(file.uploadDate)}
+                                            {file.uploadedBy ? ` · by ${file.uploadedBy}` : ""}
+                                        </span>
+                                    </li>
+                                ))}
                         </ul>
                     )}
                 </div>
             </div>
+
+            {modalOpen && (
+                <div
+                    className="modal-overlay file-upload-modal-overlay"
+                    onClick={closeModal}
+                    role="presentation"
+                >
+                    <div
+                        className="modal-card file-upload-modal"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="file-upload-modal-title"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="file-upload-modal__header">
+                            <h3 id="file-upload-modal-title" className="modal-title">
+                                Upload a file
+                            </h3>
+                            <button
+                                type="button"
+                                className="files-link-btn"
+                                onClick={closeModal}
+                                disabled={uploading}
+                            >
+                                Close
+                            </button>
+                        </div>
+
+                        <p className="files-muted file-upload-modal__hint">
+                            Drag a file into the box below, or click the box to choose one. Then
+                            press Upload.
+                        </p>
+
+                        <input
+                            ref={fileInputRef}
+                            id="file-upload-input"
+                            type="file"
+                            className="file-upload-input-hidden"
+                            onChange={handleFileChange}
+                        />
+
+                        <button
+                            type="button"
+                            className={`file-upload-dropzone ${
+                                dragging ? "file-upload-dropzone--active" : ""
+                            } ${selectedFile ? "file-upload-dropzone--has-file" : ""}`}
+                            onClick={() => fileInputRef.current?.click()}
+                            onDragOver={handleDragOver}
+                            onDragEnter={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
+                            disabled={uploading}
+                        >
+                            {selectedFile ? (
+                                <>
+                                    <span className="file-upload-dropzone__title">
+                                        {selectedFile.name}
+                                    </span>
+                                    <span className="file-upload-dropzone__meta">
+                                        {formatFileSize(selectedFile.size)} · Click or drop to
+                                        replace
+                                    </span>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="file-upload-dropzone__title">
+                                        Drop a file here
+                                    </span>
+                                    <span className="file-upload-dropzone__meta">
+                                        or click to choose from your computer
+                                    </span>
+                                </>
+                            )}
+                        </button>
+
+                        <label className="share-modal-label file-access-mode-label">
+                            Access mode
+                            <select
+                                className="file-access-mode-select"
+                                value={accessMode}
+                                disabled={uploading}
+                                onChange={(e) => setAccessMode(e.target.value)}
+                            >
+                                {ACCESS_MODES.map((mode) => (
+                                    <option key={mode.value} value={mode.value}>
+                                        {mode.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <p className="file-access-mode-hint">
+                            {ACCESS_MODES.find((m) => m.value === accessMode)?.description}
+                        </p>
+
+                        <button
+                            type="button"
+                            className="logout-btn file-upload-submit"
+                            onClick={handleUpload}
+                            disabled={uploading || !selectedFile}
+                        >
+                            {uploading ? `Uploading… ${progress}%` : "Upload"}
+                        </button>
+
+                        {uploading && (
+                            <div
+                                className="file-upload-progress"
+                                role="progressbar"
+                                aria-valuenow={progress}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                            >
+                                <div
+                                    className="file-upload-progress__bar"
+                                    style={{ width: `${progress}%` }}
+                                />
+                            </div>
+                        )}
+
+                        <div className="message-area">
+                            {status && (
+                                <p className={isError ? "error" : "success"}>{status}</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </section>
     );
 }
