@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ShareFileModal from "../components/ShareFileModal";
 import FileThumbnail from "../components/FileThumbnail";
 import FileTextPreview from "../components/FileTextPreview";
@@ -97,10 +97,18 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
     const [deletingId, setDeletingId] = useState(null);
     const [folderBusy, setFolderBusy] = useState(false);
     const [movingId, setMovingId] = useState(null);
+    const [createFolderOpen, setCreateFolderOpen] = useState(false);
+    const [newFolderName, setNewFolderName] = useState("");
+    const [createFolderSlot, setCreateFolderSlot] = useState("cloud");
+    const [createFolderError, setCreateFolderError] = useState("");
+    const [dragFileId, setDragFileId] = useState(null);
+    const [dropTargetKey, setDropTargetKey] = useState(null);
     const [syncNote, setSyncNote] = useState("");
     const [linkBanner, setLinkBanner] = useState("");
     const [storageFilter, setStorageFilter] = useState("all");
     const [preferLocalLabels, setPreferLocalLabels] = useState(false);
+    const skipFileClickRef = useRef(false);
+    const skipFolderClickRef = useRef(false);
 
     const activeFiles = useMemo(
         () => files.filter((file) => !file.deleted),
@@ -392,29 +400,68 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         }
     }, [fetchLibrarySnapshot, applySnapshot, loadFolders]);
 
-    const handleCreateFolder = async () => {
-        const name = window.prompt("New folder name");
-        if (name == null) {
+    const createSlotChoices = useMemo(() => {
+        const choices = [];
+        if (isLoggedInToSlot("cloud")) {
+            choices.push({ value: "cloud", label: "Cloud" });
+        }
+        if (isLoggedInToSlot("local")) {
+            choices.push({ value: "local", label: "Local" });
+        }
+        return choices;
+    }, []);
+
+    const showCreateSlotPicker =
+        !currentFolder &&
+        storageFilter === "all" &&
+        createSlotChoices.length > 1;
+
+    const openCreateFolderModal = () => {
+        const defaultSlot = resolveCreateFolderSlot(storageFilter, currentFolder);
+        setCreateFolderSlot(
+            isLoggedInToSlot(defaultSlot)
+                ? defaultSlot
+                : createSlotChoices[0]?.value || "cloud"
+        );
+        setNewFolderName("");
+        setCreateFolderError("");
+        setCreateFolderOpen(true);
+    };
+
+    const closeCreateFolderModal = () => {
+        if (folderBusy) {
             return;
         }
-        const trimmed = name.trim();
+        setCreateFolderOpen(false);
+        setNewFolderName("");
+        setCreateFolderError("");
+    };
+
+    const handleCreateFolder = async (event) => {
+        event.preventDefault();
+        const trimmed = newFolderName.trim();
         if (!trimmed) {
-            setError("Folder name is required");
+            setCreateFolderError("Folder name is required");
+            return;
+        }
+
+        const slot = showCreateSlotPicker
+            ? createFolderSlot
+            : resolveCreateFolderSlot(storageFilter, currentFolder);
+
+        if (!isLoggedInToSlot(slot)) {
+            setCreateFolderError(
+                slot === "local"
+                    ? "Connect to local mode to create a local folder."
+                    : "Sign in to cloud to create a cloud folder."
+            );
             return;
         }
 
         setFolderBusy(true);
+        setCreateFolderError("");
         setError("");
         try {
-            const slot = resolveCreateFolderSlot(storageFilter, currentFolder);
-            if (!isLoggedInToSlot(slot)) {
-                setError(
-                    slot === "local"
-                        ? "Connect to local mode to create a local folder."
-                        : "Sign in to cloud to create a cloud folder."
-                );
-                return;
-            }
             await createLibraryFolder({
                 name: trimmed,
                 parentId: currentFolder
@@ -424,12 +471,14 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
             });
             await loadFolders();
             setSyncNote("Folder created");
+            setCreateFolderOpen(false);
+            setNewFolderName("");
         } catch (err) {
             if (err.status === 401) {
                 onRedirectToLogin();
                 return;
             }
-            setError(err.message || "Could not create folder");
+            setCreateFolderError(err.message || "Could not create folder");
         } finally {
             setFolderBusy(false);
         }
@@ -517,6 +566,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                 await loadFiles();
             }
             setSyncNote("File moved");
+            setSelectedFileId(null);
         } catch (err) {
             if (err.status === 401) {
                 onRedirectToLogin();
@@ -525,7 +575,68 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
             setError(err.message || "Could not move file");
         } finally {
             setMovingId(null);
+            setDragFileId(null);
+            setDropTargetKey(null);
         }
+    };
+
+    const clearDragState = () => {
+        setDragFileId(null);
+        setDropTargetKey(null);
+    };
+
+    const handleFileDragStart = (event, file) => {
+        event.dataTransfer.setData("text/plain", file.id);
+        event.dataTransfer.effectAllowed = "move";
+        setDragFileId(file.id);
+    };
+
+    const handleFolderDragOver = (event, targetKey) => {
+        if (!dragFileId) {
+            return;
+        }
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        if (dropTargetKey !== targetKey) {
+            setDropTargetKey(targetKey);
+        }
+    };
+
+    const handleFolderDrop = async (event, targetFolder) => {
+        event.preventDefault();
+        event.stopPropagation();
+        skipFolderClickRef.current = true;
+        const fileId = event.dataTransfer.getData("text/plain") || dragFileId;
+        clearDragState();
+        if (!fileId) {
+            return;
+        }
+
+        const file = files.find((entry) => entry.id === fileId);
+        if (!file || file.deleted) {
+            return;
+        }
+
+        if (targetFolder) {
+            if (getFileApiSource(file) !== getFolderApiSource(targetFolder)) {
+                setError(
+                    "Files can only move into folders on the same network (cloud or local)."
+                );
+                return;
+            }
+            const nextId = getFolderSourceId(targetFolder);
+            if (String(file.folderId || "") === String(nextId || "")) {
+                return;
+            }
+            await handleMoveFile(file, nextId);
+            return;
+        }
+
+        // Dropped on Library root
+        if (!file.folderId) {
+            return;
+        }
+        await handleMoveFile(file, null);
     };
 
     const handleDelete = async (file) => {
@@ -668,7 +779,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                             <button
                                 type="button"
                                 className="file-download-btn"
-                                onClick={handleCreateFolder}
+                                onClick={openCreateFolderModal}
                                 disabled={folderBusy || loading}
                             >
                                 New folder
@@ -731,8 +842,27 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                 type="button"
                                 className={`lib-folder-crumb${
                                     !currentFolderId ? " lib-folder-crumb--current" : ""
+                                }${
+                                    dropTargetKey === "root"
+                                        ? " lib-folder-crumb--drop"
+                                        : ""
                                 }`}
-                                onClick={() => setCurrentFolderId(null)}
+                                onClick={() => {
+                                    if (skipFolderClickRef.current) {
+                                        skipFolderClickRef.current = false;
+                                        return;
+                                    }
+                                    setCurrentFolderId(null);
+                                }}
+                                onDragOver={(event) =>
+                                    handleFolderDragOver(event, "root")
+                                }
+                                onDragLeave={() => {
+                                    if (dropTargetKey === "root") {
+                                        setDropTargetKey(null);
+                                    }
+                                }}
+                                onDrop={(event) => handleFolderDrop(event, null)}
                             >
                                 Library
                             </button>
@@ -747,8 +877,27 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                             String(folder.id) === String(currentFolderId)
                                                 ? " lib-folder-crumb--current"
                                                 : ""
+                                        }${
+                                            dropTargetKey === String(folder.id)
+                                                ? " lib-folder-crumb--drop"
+                                                : ""
                                         }`}
-                                        onClick={() => setCurrentFolderId(String(folder.id))}
+                                        onClick={() => {
+                                            if (skipFolderClickRef.current) {
+                                                skipFolderClickRef.current = false;
+                                                return;
+                                            }
+                                            setCurrentFolderId(String(folder.id));
+                                        }}
+                                        onDragOver={(event) =>
+                                            handleFolderDragOver(event, String(folder.id))
+                                        }
+                                        onDragLeave={() => {
+                                            if (dropTargetKey === String(folder.id)) {
+                                                setDropTargetKey(null);
+                                            }
+                                        }}
+                                        onDrop={(event) => handleFolderDrop(event, folder)}
                                     >
                                         {folder.name}
                                     </button>
@@ -812,14 +961,37 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                 )}
 
                 {!loading && (visibleFolders.length > 0 || visibleFiles.length > 0) && (
-                    <div className="lib-grid" role="list">
+                    <div
+                        className={`lib-grid${dragFileId ? " lib-grid--dragging" : ""}`}
+                        role="list"
+                        onDragEnd={clearDragState}
+                    >
                         {visibleFolders.map((folder) => (
                             <button
                                 key={`folder:${folder.id}`}
                                 type="button"
                                 role="listitem"
-                                className="lib-tile lib-tile--folder"
-                                onClick={() => setCurrentFolderId(String(folder.id))}
+                                className={`lib-tile lib-tile--folder${
+                                    dropTargetKey === String(folder.id)
+                                        ? " lib-tile--drop-target"
+                                        : ""
+                                }`}
+                                onClick={() => {
+                                    if (skipFolderClickRef.current) {
+                                        skipFolderClickRef.current = false;
+                                        return;
+                                    }
+                                    setCurrentFolderId(String(folder.id));
+                                }}
+                                onDragOver={(event) =>
+                                    handleFolderDragOver(event, String(folder.id))
+                                }
+                                onDragLeave={() => {
+                                    if (dropTargetKey === String(folder.id)) {
+                                        setDropTargetKey(null);
+                                    }
+                                }}
+                                onDrop={(event) => handleFolderDrop(event, folder)}
                             >
                                 <div className="lib-thumb lib-thumb--folder" aria-hidden="true">
                                     <span className="lib-folder-glyph" />
@@ -855,8 +1027,22 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                     key={file.id}
                                     type="button"
                                     role="listitem"
-                                    className="lib-tile"
-                                    onClick={() => setSelectedFileId(file.id)}
+                                    className={`lib-tile${
+                                        dragFileId === file.id ? " lib-tile--dragging" : ""
+                                    }`}
+                                    draggable
+                                    onDragStart={(event) => {
+                                        skipFileClickRef.current = true;
+                                        handleFileDragStart(event, file);
+                                    }}
+                                    onDragEnd={clearDragState}
+                                    onClick={() => {
+                                        if (skipFileClickRef.current) {
+                                            skipFileClickRef.current = false;
+                                            return;
+                                        }
+                                        setSelectedFileId(file.id);
+                                    }}
                                 >
                                     <div className="lib-thumb">
                                         <span
@@ -1160,6 +1346,92 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                 </div>
                             </>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {createFolderOpen && (
+                <div
+                    className="modal-overlay"
+                    onClick={closeCreateFolderModal}
+                    role="presentation"
+                >
+                    <div
+                        className="modal-card lib-create-folder-modal"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="create-folder-title"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <h3 id="create-folder-title" className="modal-title">
+                            New folder
+                        </h3>
+                        <p className="files-muted lib-create-folder-hint">
+                            {currentFolder
+                                ? `Create a folder inside “${currentFolder.name}”.`
+                                : "Create a virtual folder in your library."}
+                        </p>
+                        <form onSubmit={handleCreateFolder}>
+                            <label className="lib-create-folder-label" htmlFor="new-folder-name">
+                                Folder name
+                            </label>
+                            <input
+                                id="new-folder-name"
+                                className="lib-access-select lib-create-folder-input"
+                                type="text"
+                                value={newFolderName}
+                                onChange={(event) => setNewFolderName(event.target.value)}
+                                placeholder="e.g. Class notes"
+                                maxLength={80}
+                                autoFocus
+                                disabled={folderBusy}
+                            />
+                            {showCreateSlotPicker && (
+                                <>
+                                    <label
+                                        className="lib-create-folder-label"
+                                        htmlFor="new-folder-slot"
+                                    >
+                                        Location
+                                    </label>
+                                    <select
+                                        id="new-folder-slot"
+                                        className="lib-access-select"
+                                        value={createFolderSlot}
+                                        onChange={(event) =>
+                                            setCreateFolderSlot(event.target.value)
+                                        }
+                                        disabled={folderBusy}
+                                    >
+                                        {createSlotChoices.map((choice) => (
+                                            <option key={choice.value} value={choice.value}>
+                                                {choice.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </>
+                            )}
+                            {createFolderError && (
+                                <p className="error">{createFolderError}</p>
+                            )}
+                            <div className="lib-create-folder-actions">
+                                <button
+                                    type="button"
+                                    className="file-download-btn"
+                                    onClick={closeCreateFolderModal}
+                                    disabled={folderBusy}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="logout-btn"
+                                    disabled={folderBusy}
+                                >
+                                    {folderBusy ? "Creating…" : "Create folder"}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

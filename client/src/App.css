@@ -1976,6 +1976,60 @@
   font-weight: 600;
 }
 
+.lib-folder-crumb--drop {
+  color: #fff;
+  background: rgba(199, 234, 187, 0.22);
+}
+
+.lib-grid--dragging .lib-tile--folder {
+  outline: 1px dashed rgba(255, 255, 255, 0.28);
+}
+
+.lib-tile--drop-target {
+  outline: 2px solid rgba(199, 234, 187, 0.85);
+  background: rgba(199, 234, 187, 0.1);
+}
+
+.lib-tile--dragging {
+  opacity: 0.55;
+}
+
+.lib-create-folder-modal {
+  max-width: 420px;
+}
+
+.lib-create-folder-hint {
+  margin: 0 0 1rem;
+}
+
+.lib-create-folder-label {
+  display: block;
+  margin: 0 0 0.4rem;
+  font-family: "Jost", sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.lib-create-folder-input {
+  width: 100%;
+  margin-bottom: 0.85rem;
+  box-sizing: border-box;
+}
+
+.lib-create-folder-modal .lib-access-select {
+  width: 100%;
+  margin-bottom: 0.85rem;
+}
+
+.lib-create-folder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+}
+
 .lib-folder-bar-actions {
   display: flex;
   flex-wrap: wrap;
@@ -3266,7 +3320,7 @@
 }
 
 .file-upload-modal__hint {
-  margin: 0 0 1.75rem;
+  margin: 0 0 2.4rem;
 }
 
 .file-upload-dropzone {
