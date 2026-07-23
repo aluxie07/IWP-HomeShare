@@ -549,11 +549,30 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         }
     };
 
-    const handleMoveFile = async (file, nextFolderId) => {
+    const handleMoveFile = async (file, nextFolderId, { dismissDetail = false } = {}) => {
+        const normalizedNext = nextFolderId || null;
+        if (String(file.folderId || "") === String(normalizedNext || "")) {
+            return;
+        }
+
+        let previousFiles = null;
         setMovingId(file.id);
         setError("");
+        setFiles((prev) => {
+            previousFiles = prev;
+            return prev.map((entry) =>
+                entry.id === file.id
+                    ? { ...entry, folderId: normalizedNext }
+                    : entry
+            );
+        });
+        if (dismissDetail) {
+            setSelectedFileId(null);
+        }
+        clearDragState();
+
         try {
-            const updated = await moveFileToFolder(file, nextFolderId || null);
+            const updated = await moveFileToFolder(file, normalizedNext);
             if (updated) {
                 setFiles((prev) =>
                     prev.map((entry) =>
@@ -562,12 +581,12 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                             : entry
                     )
                 );
-            } else {
-                await loadFiles();
             }
             setSyncNote("File moved");
-            setSelectedFileId(null);
         } catch (err) {
+            if (previousFiles) {
+                setFiles(previousFiles);
+            }
             if (err.status === 401) {
                 onRedirectToLogin();
                 return;
@@ -575,8 +594,6 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
             setError(err.message || "Could not move file");
         } finally {
             setMovingId(null);
-            setDragFileId(null);
-            setDropTargetKey(null);
         }
     };
 
@@ -628,7 +645,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
             if (String(file.folderId || "") === String(nextId || "")) {
                 return;
             }
-            await handleMoveFile(file, nextId);
+            await handleMoveFile(file, nextId, { dismissDetail: true });
             return;
         }
 
@@ -636,7 +653,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         if (!file.folderId) {
             return;
         }
-        await handleMoveFile(file, null);
+        await handleMoveFile(file, null, { dismissDetail: true });
     };
 
     const handleDelete = async (file) => {
