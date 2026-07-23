@@ -3319,7 +3319,7 @@
   margin: 0;
 }
 
-.file-upload-modal__hint {
+.file-upload-modal .file-upload-modal__hint {
   margin: 0 0 2.4rem;
 }
 
