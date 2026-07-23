@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 const TUTORIALS = {
@@ -12,8 +12,16 @@ const TUTORIALS = {
     },
 };
 
+function prefersReducedMotion() {
+    if (typeof window === "undefined" || !window.matchMedia) {
+        return false;
+    }
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 function Help({ onBack, onOpenLocalSetup, focusSection }) {
     const [lightbox, setLightbox] = useState(null);
+    const pageRef = useRef(null);
 
     useEffect(() => {
         if (!focusSection) return undefined;
@@ -25,6 +33,40 @@ function Help({ onBack, onOpenLocalSetup, focusSection }) {
         }, 50);
         return () => window.clearTimeout(timer);
     }, [focusSection]);
+
+    useEffect(() => {
+        const root = pageRef.current;
+        if (!root) return undefined;
+
+        const cards = root.querySelectorAll(".help-page-card");
+        if (!cards.length) return undefined;
+
+        if (prefersReducedMotion()) {
+            cards.forEach((card) => {
+                card.classList.add("help-page-card--visible");
+            });
+            return undefined;
+        }
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    entry.target.classList.toggle(
+                        "help-page-card--visible",
+                        entry.isIntersecting
+                    );
+                });
+            },
+            {
+                threshold: 0.2,
+                rootMargin: "-8% 0px -8% 0px",
+            }
+        );
+
+        cards.forEach((card) => observer.observe(card));
+
+        return () => observer.disconnect();
+    }, []);
 
     useEffect(() => {
         if (!lightbox) return undefined;
@@ -49,7 +91,7 @@ function Help({ onBack, onOpenLocalSetup, focusSection }) {
     const closeLightbox = () => setLightbox(null);
 
     return (
-        <section className="dashboard-page dashboard-page--wide help-page">
+        <section ref={pageRef} className="dashboard-page dashboard-page--wide help-page">
             <div className="dashboard-card help-page-card help-page-card--header">
                 <div className="network-settings-header">
                     <h2 className="auth-title">Help</h2>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import Footer from "./components/Footer";
 import Header from "./components/Header";
@@ -41,6 +41,14 @@ import {
     ensureShareInUrl,
 } from "./utils/urlTokens";
 
+const PAGE_FADE_MS = 220;
+
+function prefersReducedMotion() {
+    if (typeof window === "undefined" || !window.matchMedia) {
+        return false;
+    }
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
 function getInitialRoute() {
     const verifyToken = getVerifyTokenFromUrl();
     if (verifyToken) {
@@ -67,7 +75,8 @@ function getInitialRoute() {
 
 function App() {
     const initial = getInitialRoute();
-    const [page, setPage] = useState(initial.page);
+    const [page, setPageImmediate] = useState(initial.page);
+    const [pageFade, setPageFade] = useState(null);
     const [verifyToken, setVerifyToken] = useState(initial.verifyToken);
     const [resetToken, setResetToken] = useState(initial.resetToken);
     const [shareToken, setShareToken] = useState(initial.shareToken);
@@ -80,6 +89,59 @@ function App() {
     });
     const [exitingLocalMode, setExitingLocalMode] = useState(false);
     const [helpFocus, setHelpFocus] = useState(null);
+    const pageRef = useRef(initial.page);
+    const pendingPageRef = useRef(null);
+    const fadeTimerRef = useRef(null);
+
+    const setPage = useCallback((next) => {
+        const current = pendingPageRef.current ?? pageRef.current;
+        const resolved = typeof next === "function" ? next(current) : next;
+        if (resolved === current) {
+            return;
+        }
+
+        if (prefersReducedMotion()) {
+            if (fadeTimerRef.current) {
+                window.clearTimeout(fadeTimerRef.current);
+                fadeTimerRef.current = null;
+            }
+            pendingPageRef.current = null;
+            pageRef.current = resolved;
+            setPageImmediate(resolved);
+            setPageFade(null);
+            return;
+        }
+
+        pendingPageRef.current = resolved;
+        setPageFade("out");
+
+        if (fadeTimerRef.current) {
+            window.clearTimeout(fadeTimerRef.current);
+        }
+
+        fadeTimerRef.current = window.setTimeout(() => {
+            const nextPage = pendingPageRef.current;
+            pendingPageRef.current = null;
+            if (nextPage != null) {
+                pageRef.current = nextPage;
+                setPageImmediate(nextPage);
+            }
+            setPageFade("in");
+            fadeTimerRef.current = window.setTimeout(() => {
+                setPageFade(null);
+                fadeTimerRef.current = null;
+            }, PAGE_FADE_MS);
+        }, PAGE_FADE_MS);
+    }, []);
+
+    useEffect(
+        () => () => {
+            if (fadeTimerRef.current) {
+                window.clearTimeout(fadeTimerRef.current);
+            }
+        },
+        []
+    );
 
     const openHelp = (section = null) => {
         setHelpFocus(typeof section === "string" ? section : null);
@@ -308,6 +370,12 @@ function App() {
                                     page === "reset-password"
                                   ? "app-page-shell__content--center"
                                   : "app-page-shell__content--scroll"
+                        }${
+                            pageFade === "out"
+                                ? " app-page-shell__content--fade-out"
+                                : pageFade === "in"
+                                  ? " app-page-shell__content--fade-in"
+                                  : ""
                         }`}
                     >
                 {page === "home" && (
