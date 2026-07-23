@@ -30,6 +30,13 @@ const fileSchema = new mongoose.Schema({
     storedFilename: { type: String, required: true },
     uploadDate: { type: Date, default: Date.now },
     owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    /** Virtual library folder (null = root). Metadata only — not a Windows subdir. */
+    folderId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Folder",
+        default: null,
+        index: true,
+    },
     uploadedByUsername: { type: String, trim: true },
     fileSize: { type: Number, required: true },
     fileType: { type: String, required: true },

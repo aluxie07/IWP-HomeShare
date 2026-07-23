@@ -34,6 +34,7 @@ function createUploadSession({
     fileSize,
     fileType,
     accessMode,
+    folderId = null,
     storageMode,
     chunkSize = DEFAULT_CHUNK_SIZE,
 }) {
@@ -52,6 +53,7 @@ function createUploadSession({
         fileSize,
         fileType,
         accessMode,
+        folderId: folderId ? String(folderId) : null,
         storageMode,
         chunkSize,
         chunkCount,

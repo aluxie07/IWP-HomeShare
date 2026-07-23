@@ -19,7 +19,20 @@ import { getApiMode } from "../utils/apiDiscovery";
 import {
     fetchMergedLibrarySnapshot,
     fileApiFetch,
+    getFileApiSource,
 } from "../utils/mergedLibrary";
+import { isLoggedInToSlot } from "../utils/authStorage";
+import {
+    buildFolderBreadcrumbs,
+    createLibraryFolder,
+    deleteLibraryFolder,
+    fetchLibraryFolders,
+    getFolderApiSource,
+    getFolderSourceId,
+    moveFileToFolder,
+    renameLibraryFolder,
+    resolveCreateFolderSlot,
+} from "../utils/cloudFolders";
 import { isTextFile } from "../utils/textFilePreview";
 import { isDocumentPreviewFile } from "../utils/documentPreview";
 
@@ -61,8 +74,20 @@ function mergeServerFileIntoTagged(existing, serverFile) {
     };
 }
 
+function uploadTargetFromFolder(folder) {
+    if (!folder) {
+        return null;
+    }
+    return {
+        folderId: getFolderSourceId(folder),
+        slot: getFolderApiSource(folder),
+    };
+}
+
 function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
     const [files, setFiles] = useState([]);
+    const [folders, setFolders] = useState([]);
+    const [currentFolderId, setCurrentFolderId] = useState(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState("");
@@ -70,6 +95,8 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
     const [shareFile, setShareFile] = useState(null);
     const [updatingModeId, setUpdatingModeId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
+    const [folderBusy, setFolderBusy] = useState(false);
+    const [movingId, setMovingId] = useState(null);
     const [syncNote, setSyncNote] = useState("");
     const [linkBanner, setLinkBanner] = useState("");
     const [storageFilter, setStorageFilter] = useState("all");
@@ -88,6 +115,63 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
             ),
         [activeFiles, storageFilter, preferLocalLabels]
     );
+    const foldersEnabled =
+        isLoggedInToSlot("cloud") || isLoggedInToSlot("local");
+    const currentFolder = useMemo(
+        () =>
+            currentFolderId
+                ? folders.find((folder) => String(folder.id) === String(currentFolderId)) ||
+                  null
+                : null,
+        [folders, currentFolderId]
+    );
+    const folderBreadcrumbs = useMemo(
+        () => buildFolderBreadcrumbs(folders, currentFolderId),
+        [folders, currentFolderId]
+    );
+    const visibleFolders = useMemo(() => {
+        if (!foldersEnabled) {
+            return [];
+        }
+        const parentKey = currentFolderId ? String(currentFolderId) : null;
+        return folders
+            .filter((folder) => {
+                if (storageFilter === "cloud" && folder.apiSource !== "cloud") {
+                    return false;
+                }
+                if (storageFilter === "local" && folder.apiSource !== "local") {
+                    return false;
+                }
+                const parent = folder.parentFolder
+                    ? String(folder.parentFolder)
+                    : null;
+                return parent === parentKey;
+            })
+            .sort((a, b) =>
+                String(a.name).localeCompare(String(b.name), undefined, {
+                    sensitivity: "base",
+                })
+            );
+    }, [folders, currentFolderId, foldersEnabled, storageFilter]);
+    const visibleFiles = useMemo(() => {
+        if (!foldersEnabled) {
+            return filteredActiveFiles;
+        }
+
+        return filteredActiveFiles.filter((file) => {
+            if (currentFolder) {
+                const fileSlot = getFileApiSource(file);
+                if (fileSlot !== getFolderApiSource(currentFolder)) {
+                    return false;
+                }
+                return (
+                    String(file.folderId || "") ===
+                    String(getFolderSourceId(currentFolder))
+                );
+            }
+            return !file.folderId;
+        });
+    }, [filteredActiveFiles, foldersEnabled, currentFolder]);
     const deletedFiles = useMemo(
         () => files.filter((file) => file.deleted),
         [files]
@@ -96,6 +180,30 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         () => files.find((file) => file.id === selectedFileId) || null,
         [files, selectedFileId]
     );
+    const moveFolderOptions = useMemo(() => {
+        if (!selectedFile) {
+            return [{ id: "", label: "Library root" }];
+        }
+        const fileSlot = getFileApiSource(selectedFile);
+        const options = [{ id: "", label: "Library root" }];
+        const sorted = folders
+            .filter((folder) => folder.apiSource === fileSlot)
+            .sort((a, b) =>
+                String(a.name).localeCompare(String(b.name), undefined, {
+                    sensitivity: "base",
+                })
+            );
+        sorted.forEach((folder) => {
+            const trail = buildFolderBreadcrumbs(folders, folder.id)
+                .map((entry) => entry.name)
+                .join(" / ");
+            options.push({
+                id: String(getFolderSourceId(folder)),
+                label: trail || folder.name,
+            });
+        });
+        return options;
+    }, [folders, selectedFile]);
 
     const applySnapshot = useCallback((snapshot, { refreshLabel = false } = {}) => {
         setFiles(snapshot.files);
@@ -111,6 +219,21 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         }
         setSyncNote(note);
     }, []);
+
+    const loadFolders = useCallback(async () => {
+        try {
+            const next = await fetchLibraryFolders();
+            setFolders(next);
+            return next;
+        } catch (err) {
+            if (err.status === 401) {
+                onRedirectToLogin();
+                return null;
+            }
+            setFolders([]);
+            return [];
+        }
+    }, [onRedirectToLogin]);
 
     const fetchLibrarySnapshot = useCallback(async () => {
         try {
@@ -134,7 +257,10 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
             setLinkBanner("");
 
             try {
-                const snapshot = await fetchLibrarySnapshot();
+                const [snapshot] = await Promise.all([
+                    fetchLibrarySnapshot(),
+                    loadFolders(),
+                ]);
                 if (cancelled || !snapshot) {
                     return;
                 }
@@ -157,7 +283,25 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         return () => {
             cancelled = true;
         };
-    }, [fetchLibrarySnapshot, applySnapshot]);
+    }, [fetchLibrarySnapshot, applySnapshot, loadFolders]);
+
+    useEffect(() => {
+        if (!currentFolderId) {
+            return;
+        }
+        const folder = folders.find(
+            (entry) => String(entry.id) === String(currentFolderId)
+        );
+        if (!folder) {
+            setCurrentFolderId(null);
+            return;
+        }
+        if (storageFilter === "cloud" && folder.apiSource !== "cloud") {
+            setCurrentFolderId(null);
+        } else if (storageFilter === "local" && folder.apiSource !== "local") {
+            setCurrentFolderId(null);
+        }
+    }, [storageFilter, currentFolderId, folders]);
 
     useEffect(() => {
         let cancelled = false;
@@ -211,7 +355,10 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         setSyncNote("");
 
         try {
-            const snapshot = await fetchLibrarySnapshot();
+            const [snapshot] = await Promise.all([
+                fetchLibrarySnapshot(),
+                loadFolders(),
+            ]);
             if (!snapshot) {
                 return;
             }
@@ -229,7 +376,10 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         setLoading(true);
         setError("");
         try {
-            const snapshot = await fetchLibrarySnapshot();
+            const [snapshot] = await Promise.all([
+                fetchLibrarySnapshot(),
+                loadFolders(),
+            ]);
             if (snapshot) {
                 applySnapshot(snapshot);
             }
@@ -240,7 +390,143 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
         } finally {
             setLoading(false);
         }
-    }, [fetchLibrarySnapshot, applySnapshot]);
+    }, [fetchLibrarySnapshot, applySnapshot, loadFolders]);
+
+    const handleCreateFolder = async () => {
+        const name = window.prompt("New folder name");
+        if (name == null) {
+            return;
+        }
+        const trimmed = name.trim();
+        if (!trimmed) {
+            setError("Folder name is required");
+            return;
+        }
+
+        setFolderBusy(true);
+        setError("");
+        try {
+            const slot = resolveCreateFolderSlot(storageFilter, currentFolder);
+            if (!isLoggedInToSlot(slot)) {
+                setError(
+                    slot === "local"
+                        ? "Connect to local mode to create a local folder."
+                        : "Sign in to cloud to create a cloud folder."
+                );
+                return;
+            }
+            await createLibraryFolder({
+                name: trimmed,
+                parentId: currentFolder
+                    ? getFolderSourceId(currentFolder)
+                    : null,
+                slot,
+            });
+            await loadFolders();
+            setSyncNote("Folder created");
+        } catch (err) {
+            if (err.status === 401) {
+                onRedirectToLogin();
+                return;
+            }
+            setError(err.message || "Could not create folder");
+        } finally {
+            setFolderBusy(false);
+        }
+    };
+
+    const handleRenameCurrentFolder = async () => {
+        if (!currentFolder) {
+            return;
+        }
+        const name = window.prompt("Rename folder", currentFolder.name || "");
+        if (name == null) {
+            return;
+        }
+        const trimmed = name.trim();
+        if (!trimmed) {
+            setError("Folder name is required");
+            return;
+        }
+
+        setFolderBusy(true);
+        setError("");
+        try {
+            await renameLibraryFolder(currentFolder, trimmed);
+            await loadFolders();
+            setSyncNote("Folder renamed");
+        } catch (err) {
+            if (err.status === 401) {
+                onRedirectToLogin();
+                return;
+            }
+            setError(err.message || "Could not rename folder");
+        } finally {
+            setFolderBusy(false);
+        }
+    };
+
+    const handleDeleteCurrentFolder = async () => {
+        if (!currentFolder) {
+            return;
+        }
+        if (
+            !window.confirm(
+                `Delete folder "${currentFolder.name || "Untitled"}"? It must be empty.`
+            )
+        ) {
+            return;
+        }
+
+        setFolderBusy(true);
+        setError("");
+        try {
+            await deleteLibraryFolder(currentFolder);
+            setCurrentFolderId(
+                currentFolder.parentFolder
+                    ? String(currentFolder.parentFolder)
+                    : null
+            );
+            await loadFolders();
+            setSyncNote("Folder deleted");
+        } catch (err) {
+            if (err.status === 401) {
+                onRedirectToLogin();
+                return;
+            }
+            setError(err.message || "Could not delete folder");
+        } finally {
+            setFolderBusy(false);
+        }
+    };
+
+    const handleMoveFile = async (file, nextFolderId) => {
+        setMovingId(file.id);
+        setError("");
+        try {
+            const updated = await moveFileToFolder(file, nextFolderId || null);
+            if (updated) {
+                setFiles((prev) =>
+                    prev.map((entry) =>
+                        entry.id === file.id
+                            ? mergeServerFileIntoTagged(entry, updated)
+                            : entry
+                    )
+                );
+            } else {
+                await loadFiles();
+            }
+            setSyncNote("File moved");
+        } catch (err) {
+            if (err.status === 401) {
+                onRedirectToLogin();
+                return;
+            }
+            setError(err.message || "Could not move file");
+        } finally {
+            setMovingId(null);
+        }
+    };
 
     const handleDelete = async (file) => {
         if (
@@ -351,7 +637,18 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
     };
 
     const isEmptyLibrary =
-        !loading && !error && activeFiles.length === 0 && deletedFiles.length === 0;
+        !loading &&
+        !error &&
+        activeFiles.length === 0 &&
+        deletedFiles.length === 0 &&
+        folders.length === 0;
+    const isEmptyFolderView =
+        !loading &&
+        !error &&
+        foldersEnabled &&
+        visibleFolders.length === 0 &&
+        visibleFiles.length === 0 &&
+        (currentFolderId || activeFiles.length > 0 || folders.length > 0);
 
     return (
         <section className="dashboard-page dashboard-page--wide lib-page">
@@ -361,11 +658,22 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                         <h2 className="lib-title">File library</h2>
                         <p className="lib-intro">
                             Click any file to preview it, change who can see it, or send a share
-                            link. Removed files stay listed below for a while, so nothing
-                            disappears without a trace.
+                            link. Organize cloud and local files into virtual folders (they stay
+                            flat in the Windows HomeShare folder). Removed files stay listed below
+                            for a while, so nothing disappears without a trace.
                         </p>
                     </div>
                     <div className="lib-header-actions">
+                        {foldersEnabled && (
+                            <button
+                                type="button"
+                                className="file-download-btn"
+                                onClick={handleCreateFolder}
+                                disabled={folderBusy || loading}
+                            >
+                                New folder
+                            </button>
+                        )}
                         <button
                             type="button"
                             className="file-download-btn"
@@ -377,7 +685,9 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                         <button
                             type="button"
                             className="logout-btn files-upload-nav-btn"
-                            onClick={onGoToUpload}
+                            onClick={() =>
+                                onGoToUpload(uploadTargetFromFolder(currentFolder))
+                            }
                         >
                             Upload
                         </button>
@@ -394,7 +704,7 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                 {error && <p className="error">{error}</p>}
                 {!error && syncNote && <p className="files-muted">{syncNote}</p>}
 
-                {!loading && !error && activeFiles.length > 0 && (
+                {!loading && !error && (activeFiles.length > 0 || folders.length > 0) && (
                     <div className="file-library-filters" role="group" aria-label="Filter by storage">
                         {STORAGE_FILTERS.map((option) => (
                             <button
@@ -414,10 +724,65 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                     </div>
                 )}
 
+                {foldersEnabled && !loading && !error && (
+                    <div className="lib-folder-bar">
+                        <nav className="lib-folder-crumbs" aria-label="Folder path">
+                            <button
+                                type="button"
+                                className={`lib-folder-crumb${
+                                    !currentFolderId ? " lib-folder-crumb--current" : ""
+                                }`}
+                                onClick={() => setCurrentFolderId(null)}
+                            >
+                                Library
+                            </button>
+                            {folderBreadcrumbs.map((folder) => (
+                                <span key={folder.id} className="lib-folder-crumb-wrap">
+                                    <span className="lib-folder-crumb-sep" aria-hidden="true">
+                                        /
+                                    </span>
+                                    <button
+                                        type="button"
+                                        className={`lib-folder-crumb${
+                                            String(folder.id) === String(currentFolderId)
+                                                ? " lib-folder-crumb--current"
+                                                : ""
+                                        }`}
+                                        onClick={() => setCurrentFolderId(String(folder.id))}
+                                    >
+                                        {folder.name}
+                                    </button>
+                                </span>
+                            ))}
+                        </nav>
+                        {currentFolderId && (
+                            <div className="lib-folder-bar-actions">
+                                <button
+                                    type="button"
+                                    className="files-link-btn"
+                                    onClick={handleRenameCurrentFolder}
+                                    disabled={folderBusy}
+                                >
+                                    Rename
+                                </button>
+                                <button
+                                    type="button"
+                                    className="files-link-btn"
+                                    onClick={handleDeleteCurrentFolder}
+                                    disabled={folderBusy}
+                                >
+                                    Delete folder
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {!loading &&
                     !error &&
                     activeFiles.length > 0 &&
-                    filteredActiveFiles.length === 0 && (
+                    filteredActiveFiles.length === 0 &&
+                    visibleFolders.length === 0 && (
                         <p className="files-muted">
                             No {storageFilter === "cloud" ? "cloud" : "local"} files in your
                             library.{" "}
@@ -431,9 +796,56 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                         </p>
                     )}
 
-                {!loading && filteredActiveFiles.length > 0 && (
+                {isEmptyFolderView && (
+                    <p className="files-muted">
+                        This folder is empty.{" "}
+                        <button
+                            type="button"
+                            className="files-link-btn"
+                            onClick={() =>
+                                onGoToUpload(uploadTargetFromFolder(currentFolder))
+                            }
+                        >
+                            Upload into this folder
+                        </button>
+                    </p>
+                )}
+
+                {!loading && (visibleFolders.length > 0 || visibleFiles.length > 0) && (
                     <div className="lib-grid" role="list">
-                        {filteredActiveFiles.map((file) => {
+                        {visibleFolders.map((folder) => (
+                            <button
+                                key={`folder:${folder.id}`}
+                                type="button"
+                                role="listitem"
+                                className="lib-tile lib-tile--folder"
+                                onClick={() => setCurrentFolderId(String(folder.id))}
+                            >
+                                <div className="lib-thumb lib-thumb--folder" aria-hidden="true">
+                                    <span className="lib-folder-glyph" />
+                                </div>
+                                <div className="lib-tile-body">
+                                    <span
+                                        className={`lib-tile-storage-inline lib-tile-storage-inline--${
+                                            folder.apiSource === "local"
+                                                ? "local"
+                                                : "cloud"
+                                        }`}
+                                    >
+                                        Folder
+                                    </span>
+                                    <span className="lib-tile-name" title={folder.name}>
+                                        {folder.name}
+                                    </span>
+                                    <span className="lib-tile-meta">
+                                        {folder.apiSource === "local"
+                                            ? "Local"
+                                            : "Cloud"}
+                                    </span>
+                                </div>
+                            </button>
+                        ))}
+                        {visibleFiles.map((file) => {
                             const scope = resolveStorageScope(file, {
                                 preferLocal: preferLocalLabels,
                             });
@@ -501,12 +913,12 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                         <h3>No files yet</h3>
                         <p>
                             Upload something to start your library — it&apos;ll show up here right
-                            away.
+                            away. You can also create cloud folders to organize files.
                         </p>
                         <button
                             type="button"
                             className="logout-btn"
-                            onClick={onGoToUpload}
+                            onClick={() => onGoToUpload(null)}
                         >
                             Upload a file
                         </button>
@@ -677,6 +1089,35 @@ function FileLibrary({ onRedirectToLogin, onGoToUpload }) {
                                         ))}
                                     </select>
                                 </div>
+                                {isLoggedInToSlot(getFileApiSource(selectedFile)) && (
+                                        <div className="lib-access-wrap">
+                                            <p className="lib-meta-label">Folder</p>
+                                            <select
+                                                className="lib-access-select"
+                                                value={
+                                                    selectedFile.folderId
+                                                        ? String(selectedFile.folderId)
+                                                        : ""
+                                                }
+                                                disabled={movingId === selectedFile.id}
+                                                onChange={(e) =>
+                                                    handleMoveFile(
+                                                        selectedFile,
+                                                        e.target.value || null
+                                                    )
+                                                }
+                                            >
+                                                {moveFolderOptions.map((option) => (
+                                                    <option
+                                                        key={option.id || "root"}
+                                                        value={option.id}
+                                                    >
+                                                        {option.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
                                 {selectedFile.accessMode === "local_only" && (
                                     <p className="files-muted file-detail-local-only-note">
                                         Local Only range:{" "}

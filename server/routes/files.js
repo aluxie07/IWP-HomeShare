@@ -45,6 +45,7 @@ const {
 const { softDeleteFile, isFileDeleted } = require("../utils/softDeleteFile");
 const { setLastSyncOwnerId } = require("../utils/syncOwner");
 const { buildLocalOnlyBinding } = require("../utils/networkTrust");
+const { resolveOwnedFolderId } = require("../utils/folderAccess");
 
 const router = express.Router();
 const CHUNK_BODY_LIMIT = DEFAULT_CHUNK_SIZE + 1024 * 1024;
@@ -108,6 +109,7 @@ function formatFile(file) {
             file.uploadedByUsername ||
             ownerDoc?.username ||
             null,
+        folderId: file.folderId ? String(file.folderId) : null,
         deleted: deleted,
         deletedAt: file.deletedAt || null,
         deletedBy:
@@ -280,6 +282,11 @@ router.post(
             }
 
             const accessMode = normalizeAccessMode(req.body?.accessMode);
+            const folderResolve = await resolveOwnedFolderId(req.body?.folderId, req.user.id);
+            if (!folderResolve.ok) {
+                return res.status(folderResolve.status).json({ message: folderResolve.message });
+            }
+            const folderId = folderResolve.folderId;
 
             // Local disk / Local Network Mode: mirror into HomeShare Explorer folder
             if (storageKind === "disk" || shouldUseDisk()) {
@@ -319,6 +326,7 @@ router.post(
                 shardMeta,
                 chunks,
                 accessMode,
+                folderId,
                 ...localOnlyFieldsForCreate(accessMode, req.clientIp),
             });
 
@@ -356,6 +364,10 @@ router.post("/files/upload/init", authMiddleware, requireMongo, async (req, res)
         const fileSize = Number(req.body?.fileSize);
         const fileType = String(req.body?.fileType || "application/octet-stream");
         const accessMode = normalizeAccessMode(req.body?.accessMode);
+        const folderResolve = await resolveOwnedFolderId(req.body?.folderId, req.user.id);
+        if (!folderResolve.ok) {
+            return res.status(folderResolve.status).json({ message: folderResolve.message });
+        }
         const maxBytes = getMaxFileSize();
 
         if (!filename || !Number.isFinite(fileSize) || fileSize <= 0) {
@@ -376,6 +388,7 @@ router.post("/files/upload/init", authMiddleware, requireMongo, async (req, res)
             fileSize,
             fileType,
             accessMode,
+            folderId: folderResolve.folderId,
             storageMode,
             chunkSize: DEFAULT_CHUNK_SIZE,
         });
@@ -530,6 +543,7 @@ router.post("/files/upload/:uploadId/complete", authMiddleware, requireMongo, as
             shardMeta,
             chunks,
             accessMode: session.accessMode,
+            folderId: session.folderId || null,
             ...localOnlyFieldsForCreate(session.accessMode, req.clientIp),
         });
 
@@ -693,6 +707,35 @@ function fileUnavailableMessage(file) {
     }
     return "File data is missing from storage. Upload the file again.";
 }
+
+router.patch("/files/:id/folder", authMiddleware, requireMongo, async (req, res) => {
+    try {
+        const file = await File.findOne({
+            _id: req.params.id,
+            owner: req.user.id,
+            deletedAt: null,
+        });
+        if (!file) {
+            return res.status(404).json({ message: "File not found" });
+        }
+
+        const folderResolve = await resolveOwnedFolderId(req.body?.folderId, req.user.id);
+        if (!folderResolve.ok) {
+            return res.status(folderResolve.status).json({ message: folderResolve.message });
+        }
+
+        file.folderId = folderResolve.folderId;
+        await file.save();
+
+        res.json({
+            message: "File moved",
+            file: formatFile(file),
+        });
+    } catch (err) {
+        console.error("[HomeShare] Move file failed:", err.message);
+        res.status(500).json({ message: "Could not move file" });
+    }
+});
 
 router.patch("/files/:id/access-mode", authMiddleware, async (req, res) => {
     try {

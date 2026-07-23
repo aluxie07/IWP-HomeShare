@@ -33,6 +33,7 @@ const authRoutes = require("./routes/auth");
 const dashboardRoutes = require("./routes/dashboard");
 const accountRoutes = require("./routes/account");
 const fileRoutes = require("./routes/files");
+const folderRoutes = require("./routes/folders");
 const shareRoutes = require("./routes/shares");
 const networkRoutes = require("./routes/network");
 const attachNetworkContext = require("./middleware/attachNetworkContext");
@@ -143,6 +144,7 @@ app.use(authRoutes);
 app.use(dashboardRoutes);
 app.use(accountRoutes);
 app.use(fileRoutes);
+app.use(folderRoutes);
 app.use(shareRoutes);
 app.use(networkRoutes);
 

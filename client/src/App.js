@@ -89,6 +89,7 @@ function App() {
     });
     const [exitingLocalMode, setExitingLocalMode] = useState(false);
     const [helpFocus, setHelpFocus] = useState(null);
+    const [uploadFolderTarget, setUploadFolderTarget] = useState(null);
     const pageRef = useRef(initial.page);
     const pendingPageRef = useRef(null);
     const fadeTimerRef = useRef(null);
@@ -326,6 +327,7 @@ function App() {
                         setPage("login");
                         return;
                     }
+                    setUploadFolderTarget(null);
                     setPage("upload");
                 }}
                 onLibraryClick={() => {
@@ -435,7 +437,10 @@ function App() {
                         onRedirectToLogin={redirectToLogin}
                         onLogout={redirectToLogin}
                         onDeleteAccount={() => setPage("delete-account")}
-                        onGoToUpload={() => setPage("upload")}
+                        onGoToUpload={() => {
+                            setUploadFolderTarget(null);
+                            setPage("upload");
+                        }}
                         onGoToLibrary={() => setPage("library")}
                         onGoToLocalSetup={() => setPage("local-network-setup")}
                     />
@@ -461,13 +466,20 @@ function App() {
                 {page === "upload" && (
                     <FileUpload
                         onRedirectToLogin={redirectToLogin}
-                        onGoToLibrary={() => setPage("library")}
+                        onGoToLibrary={() => {
+                            setUploadFolderTarget(null);
+                            setPage("library");
+                        }}
+                        uploadFolderTarget={uploadFolderTarget}
                     />
                 )}
                 {page === "library" && (
                     <FileLibrary
                         onRedirectToLogin={redirectToLogin}
-                        onGoToUpload={() => setPage("upload")}
+                        onGoToUpload={(target = null) => {
+                            setUploadFolderTarget(target || null);
+                            setPage("upload");
+                        }}
                     />
                 )}
                 {page === "shared-file" && (

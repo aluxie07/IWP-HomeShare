@@ -1,13 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import NetworkStatusIndicator from "../components/NetworkStatusIndicator";
-import { apiFetch, formatFileSize, formatUploadDate } from "../utils/api";
+import { apiFetch, fetchForSlot, formatFileSize, formatUploadDate } from "../utils/api";
 import { ACCESS_MODES, getAccessModeLabel } from "../utils/accessModes";
 import { getStorageScopeLabel } from "../utils/fileStorageScope";
+import { getActiveApiSlot } from "../utils/authStorage";
 
 const FIVE_GB = 5 * 1024 * 1024 * 1024;
 
-async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLogin }) {
-    const initRes = await apiFetch("/files/upload/init", {
+async function uploadFileInChunks({
+    file,
+    accessMode,
+    folderId = null,
+    slot = null,
+    onProgress,
+    onRedirectToLogin,
+}) {
+    const uploadSlot = slot || getActiveApiSlot();
+    const uploadFetch = (path, options) => fetchForSlot(uploadSlot, path, options);
+
+    const initRes = await uploadFetch("/files/upload/init", {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -17,6 +28,7 @@ async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLo
             fileSize: file.size,
             fileType: file.type || "application/octet-stream",
             accessMode,
+            folderId: folderId || null,
         }),
     });
 
@@ -38,13 +50,16 @@ async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLo
             const end = Math.min(start + chunkSize, file.size);
             const blob = file.slice(start, end);
 
-            const chunkRes = await apiFetch(`/files/upload/${uploadId}/chunks/${index}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/octet-stream",
-                },
-                body: blob,
-            });
+            const chunkRes = await uploadFetch(
+                `/files/upload/${uploadId}/chunks/${index}`,
+                {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/octet-stream",
+                    },
+                    body: blob,
+                }
+            );
 
             if (chunkRes.status === 401) {
                 onRedirectToLogin();
@@ -59,7 +74,7 @@ async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLo
             onProgress?.(Math.round(((index + 1) / chunkCount) * 100));
         }
 
-        const doneRes = await apiFetch(`/files/upload/${uploadId}/complete`, {
+        const doneRes = await uploadFetch(`/files/upload/${uploadId}/complete`, {
             method: "POST",
         });
 
@@ -76,7 +91,7 @@ async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLo
         return doneData;
     } catch (err) {
         if (err.message !== "UNAUTHORIZED") {
-            apiFetch(`/files/upload/${uploadId}`, {
+            uploadFetch(`/files/upload/${uploadId}`, {
                 method: "DELETE",
             }).catch(() => {});
         }
@@ -84,7 +99,11 @@ async function uploadFileInChunks({ file, accessMode, onProgress, onRedirectToLo
     }
 }
 
-function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
+function FileUpload({
+    onRedirectToLogin,
+    onGoToLibrary,
+    uploadFolderTarget = null,
+}) {
     const [modalOpen, setModalOpen] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
     const [status, setStatus] = useState("");
@@ -211,6 +230,8 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
             const data = await uploadFileInChunks({
                 file: selectedFile,
                 accessMode,
+                folderId: uploadFolderTarget?.folderId || null,
+                slot: uploadFolderTarget?.slot || null,
                 onProgress: setProgress,
                 onRedirectToLogin,
             });
@@ -241,6 +262,11 @@ function FileUpload({ onRedirectToLogin, onGoToLibrary }) {
                 <p className="files-page-intro">
                     Upload a file from your computer (up to 5 GB). Large files are sent in chunks so
                     uploads stay reliable.
+                    {uploadFolderTarget?.folderId
+                        ? ` This upload will go into the ${
+                              uploadFolderTarget.slot === "local" ? "local" : "cloud"
+                          } folder you had open in the library.`
+                        : ""}
                 </p>
 
                 <NetworkStatusIndicator compact />
