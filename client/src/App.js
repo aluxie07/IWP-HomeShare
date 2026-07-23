@@ -205,7 +205,7 @@ function App() {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [setPage]);
 
     useEffect(() => {
         const verify = getVerifyTokenFromUrl();
@@ -242,7 +242,7 @@ function App() {
                 setPage("login");
             }
         }
-    }, []);
+    }, [setPage]);
 
     const usesGradientBackground = true;
 
@@ -303,7 +303,7 @@ function App() {
             }
             setPage("login");
         }
-    }, [page, shareToken, apiDiscovery.mode]);
+    }, [page, shareToken, apiDiscovery.mode, setPage]);
 
     return (
         <div className="App">
